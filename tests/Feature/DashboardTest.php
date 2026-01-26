@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -20,6 +22,7 @@ test('authenticated users can visit the dashboard', function () {
             ->where('total_tasks', 0)
             ->where('completed_tasks', 0)
             ->where('active_timers', 0)
+            ->where('active_task_names', [])
             ->where('seconds_today', 0)
             ->where('seconds_week', 0)
             ->where('seconds_month', 0)
@@ -29,4 +32,24 @@ test('authenticated users can visit the dashboard', function () {
             ->has('as_of')
         )
     );
+});
+
+test('dashboard includes active task names', function () {
+    $user = User::factory()->create();
+    $task = Task::factory()->for($user)->create([
+        'title' => 'Urgent task',
+    ]);
+
+    TimeEntry::factory()->for($task)->for($user)->create([
+        'ended_at' => null,
+        'duration_seconds' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('kpi.active_timers', 1)
+            ->where('kpi.active_task_names', ['Urgent task'])
+        );
 });

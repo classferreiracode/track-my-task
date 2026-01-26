@@ -20,7 +20,17 @@ class DashboardController extends Controller
 
         $totalTasks = $user->tasks()->count();
         $completedTasks = $user->tasks()->where('is_completed', true)->count();
-        $activeTimers = $user->timeEntries()->whereNull('ended_at')->count();
+        $activeEntries = $user->timeEntries()
+            ->whereNull('ended_at')
+            ->with('task')
+            ->get();
+        $activeTimers = $activeEntries->count();
+        $activeTaskNames = $activeEntries
+            ->pluck('task.title')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         $hoursToday = $this->sumUserSecondsForRange($user->id, $dayStart, $now);
         $hoursThisWeek = $this->sumUserSecondsForRange($user->id, $weekStart, $now);
@@ -31,6 +41,7 @@ class DashboardController extends Controller
                 'total_tasks' => $totalTasks,
                 'completed_tasks' => $completedTasks,
                 'active_timers' => $activeTimers,
+                'active_task_names' => $activeTaskNames,
                 'seconds_today' => $hoursToday,
                 'seconds_week' => $hoursThisWeek,
                 'seconds_month' => $hoursThisMonth,

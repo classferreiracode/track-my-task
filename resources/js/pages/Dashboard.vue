@@ -20,6 +20,7 @@ type Props = {
         total_tasks: number;
         completed_tasks: number;
         active_timers: number;
+        active_task_names: string[];
         seconds_today: number;
         seconds_week: number;
         seconds_month: number;
@@ -103,10 +104,16 @@ const formatSeconds = (seconds: number) => {
                             {{ kpi.active_timers }}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent class="flex items-center gap-2 text-xs">
-                        <Badge variant="secondary">
+                    <CardContent class="flex flex-col gap-2 text-xs">
+                        <Badge variant="secondary" class="w-fit">
                             {{ kpi.active_timers > 0 ? 'Em andamento' : 'Livre' }}
                         </Badge>
+                        <p
+                            v-if="kpi.active_task_names.length > 0"
+                            class="text-xs text-muted-foreground"
+                        >
+                            {{ kpi.active_task_names.join(', ') }}
+                        </p>
                     </CardContent>
                 </Card>
 
