@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
+import { ChevronsUpDown } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
 import TaskColumnController from '@/actions/App/Http/Controllers/TaskColumnController';
@@ -17,6 +18,12 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as tasksIndex, report as tasksReport } from '@/routes/tasks';
@@ -166,10 +173,26 @@ const deleteTask = (task: Task) => {
     });
 };
 
+const completeTask = (task: Task) => {
+    const payload: Record<string, number | boolean> = {
+        is_completed: true,
+    };
+
+    if (doneColumnId.value) {
+        payload.task_column_id = doneColumnId.value;
+    }
+
+    router.patch(TaskController.update(task.id).url, payload, {
+        preserveScroll: true,
+    });
+};
+
 const exportStart = ref(props.reporting.month_start);
 const exportEnd = ref(props.reporting.as_of.slice(0, 10));
 
 const reportUrl = computed(() => tasksReport().url);
+
+const doneSlugs = ['done', 'concluido', 'concluida', 'concluidos', 'concluidas'];
 
 const sortedBoards = computed(() =>
     [...props.boards].sort((left, right) => left.sort_order - right.sort_order),
@@ -187,6 +210,10 @@ const activeBoard = computed(
 
 const sortedColumns = computed(() =>
     [...props.columns].sort((left, right) => left.sort_order - right.sort_order),
+);
+
+const doneColumnId = computed(
+    () => sortedColumns.value.find((column) => doneSlugs.includes(column.slug))?.id ?? null,
 );
 
 const tasksByColumn = computed(() => {
@@ -324,18 +351,10 @@ const reorderColumns = (targetColumnId: number) => {
     dragType.value = null;
 };
 
-const onBoardChange = (event: Event) => {
-    const value = Number(
-        (event.target as HTMLSelectElement | null)?.value ?? 0,
-    );
-
-    if (!value) {
-        return;
-    }
-
+const setBoard = (boardId: number) => {
     router.get(
         tasksIndex().url,
-        { board: value },
+        { board: boardId },
         { preserveScroll: true },
     );
 };
@@ -376,19 +395,31 @@ const onBoardChange = (event: Event) => {
                             <label class="text-xs font-medium">
                                 Board ativo
                             </label>
-                            <select
-                                class="border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                :value="activeBoardId ?? ''"
-                                @change="onBoardChange"
-                            >
-                                <option
-                                    v-for="board in sortedBoards"
-                                    :key="board.id"
-                                    :value="board.id"
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <button
+                                        type="button"
+                                        class="border-input flex h-9 w-full items-center justify-between rounded-md border bg-transparent px-3 py-1 text-left text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <span class="truncate">
+                                            {{ activeBoard?.name ?? 'Padrão' }}
+                                        </span>
+                                        <ChevronsUpDown class="ml-2 size-4 text-muted-foreground" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    class="w-(--reka-dropdown-menu-trigger-width) min-w-56"
+                                    align="start"
                                 >
-                                    {{ board.name }}
-                                </option>
-                            </select>
+                                    <DropdownMenuItem
+                                        v-for="board in sortedBoards"
+                                        :key="board.id"
+                                        @select="setBoard(board.id)"
+                                    >
+                                        {{ board.name }}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                         <Form
                             v-bind="TaskBoardController.store.form()"
@@ -716,6 +747,14 @@ const onBoardChange = (event: Event) => {
                                         @click="deleteTask(task)"
                                     >
                                         Delete
+                                    </Button>
+                                    <Button
+                                        v-if="!task.is_completed"
+                                        size="sm"
+                                        variant="outline"
+                                        @click="completeTask(task)"
+                                    >
+                                        Concluir
                                     </Button>
                                 </div>
                             </div>

@@ -16,9 +16,29 @@ class TaskOrderController extends Controller
 
         $orderedIds = array_values(array_unique($orderedIds));
 
+        $column = $user->taskColumns()->whereKey($columnId)->first();
+
+        if (! $column) {
+            return back()->withErrors([
+                'column_id' => 'Please select a valid column.',
+            ]);
+        }
+
+        $doneSlugs = [
+            'done',
+            'concluido',
+            'concluida',
+            'concluidos',
+            'concluidas',
+        ];
+        $isCompleted = in_array($column->slug, $doneSlugs, true);
+        $completedAt = $isCompleted ? now() : null;
+        $endedAt = $isCompleted ? now() : null;
+
         /** @var Collection<int, \App\Models\Task> $tasks */
         $tasks = $user->tasks()
             ->whereIn('id', $orderedIds)
+            ->with('activeTimeEntry')
             ->get()
             ->keyBy('id');
 
@@ -29,9 +49,20 @@ class TaskOrderController extends Controller
         }
 
         foreach ($orderedIds as $index => $taskId) {
-            $tasks[$taskId]->update([
+            $task = $tasks[$taskId];
+
+            if ($endedAt && $task->activeTimeEntry) {
+                $task->activeTimeEntry->update([
+                    'ended_at' => $endedAt,
+                    'duration_seconds' => $task->activeTimeEntry->started_at->diffInSeconds($endedAt),
+                ]);
+            }
+
+            $task->update([
                 'task_column_id' => $columnId,
                 'sort_order' => $index + 1,
+                'is_completed' => $isCompleted,
+                'completed_at' => $completedAt,
             ]);
         }
 

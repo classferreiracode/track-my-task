@@ -18,6 +18,8 @@ test('authenticated users can visit the dashboard', function () {
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard')
+        ->has('boards', 1)
+        ->where('boards.0.name', 'Padrão')
         ->has('kpi', fn (Assert $kpi) => $kpi
             ->where('total_tasks', 0)
             ->where('completed_tasks', 0)

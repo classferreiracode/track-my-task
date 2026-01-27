@@ -157,6 +157,84 @@ test('users can reorder tasks within a column', function () {
         ->and($firstTask->sort_order)->toBe(2);
 });
 
+test('moving tasks to the done column marks them as completed', function () {
+    $user = User::factory()->create();
+    $board = TaskBoard::factory()->for($user)->create();
+    $backlog = TaskColumn::factory()
+        ->for($user)
+        ->for($board, 'board')
+        ->create([
+            'name' => 'Backlog',
+            'slug' => 'backlog',
+        ]);
+    $done = TaskColumn::factory()
+        ->for($user)
+        ->for($board, 'board')
+        ->create([
+            'name' => 'Concluídas',
+            'slug' => 'done',
+        ]);
+    $task = Task::factory()->for($user)->create([
+        'task_column_id' => $backlog->id,
+        'is_completed' => false,
+        'completed_at' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('tasks.order.update'), [
+            'column_id' => $done->id,
+            'ordered_ids' => [$task->id],
+        ])
+        ->assertRedirect();
+
+    $task->refresh();
+
+    expect($task->task_column_id)->toBe($done->id)
+        ->and($task->is_completed)->toBeTrue()
+        ->and($task->completed_at)->not->toBeNull();
+});
+
+test('moving a running task to done stops the timer', function () {
+    $user = User::factory()->create();
+    $board = TaskBoard::factory()->for($user)->create();
+    $done = TaskColumn::factory()
+        ->for($user)
+        ->for($board, 'board')
+        ->create([
+            'slug' => 'done',
+        ]);
+    $task = Task::factory()->for($user)->create([
+        'task_column_id' => $done->id,
+    ]);
+
+    Date::setTestNow('2026-01-27 09:00:00');
+
+    $entry = TimeEntry::factory()
+        ->for($task)
+        ->for($user)
+        ->create([
+            'started_at' => now()->subMinutes(45),
+            'ended_at' => null,
+            'duration_seconds' => 0,
+        ]);
+
+    Date::setTestNow('2026-01-27 10:00:00');
+
+    $this->actingAs($user)
+        ->patch(route('tasks.order.update'), [
+            'column_id' => $done->id,
+            'ordered_ids' => [$task->id],
+        ])
+        ->assertRedirect();
+
+    $entry->refresh();
+
+    expect($entry->ended_at)->not->toBeNull()
+        ->and($entry->duration_seconds)->toBe(3600);
+
+    Date::setTestNow();
+});
+
 test('users can reorder columns', function () {
     $user = User::factory()->create();
     $board = TaskBoard::factory()->for($user)->create();
@@ -195,20 +273,17 @@ test('users can export a time report as csv', function () {
         'task_column_id' => $column->id,
     ]);
 
-    Date::setTestNow('2026-01-26 09:00:00');
+    Date::setTestNow('2026-01-27 10:00:00');
 
-    TimeEntry::factory()
-        ->for($task)
-        ->for($user)
-        ->create([
-            'started_at' => now()->subHours(2),
-            'ended_at' => now()->subHour(),
-            'duration_seconds' => 3600,
-        ]);
+    TimeEntry::factory()->for($task)->for($user)->create([
+        'started_at' => Date::parse('2026-01-27 08:30:00'),
+        'ended_at' => Date::parse('2026-01-27 09:45:00'),
+        'duration_seconds' => 4500,
+    ]);
 
     $response = $this->actingAs($user)->get(route('tasks.report', [
-        'start' => now()->subDay()->toDateString(),
-        'end' => now()->toDateString(),
+        'start' => '2026-01-27',
+        'end' => '2026-01-27',
         'task_board_id' => $board->id,
     ]));
 
@@ -217,8 +292,9 @@ test('users can export a time report as csv', function () {
 
     $content = $response->streamedContent();
 
-    expect($content)->toContain("\xEF\xBB\xBFTask;Status;\"Total (minutes)\";\"Total (hours)\"")
-        ->and($content)->toContain('Design sprint');
+    expect($content)->toContain("\xEF\xBB\xBFTask;Status;Day;Play;Pause;\"Total (minutes)\";\"Total (hours)\"")
+        ->and($content)->toContain('Design sprint')
+        ->and($content)->toContain('27/01/2026;08:30:00;09:45:00;75;1.25');
 
     Date::setTestNow();
 });

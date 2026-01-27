@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, ListChecks } from 'lucide-vue-next';
+import { computed } from 'vue';
 import NavFooter from '@/components/NavFooter.vue';
-import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
     Sidebar,
@@ -12,24 +12,41 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
+import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { dashboard } from '@/routes';
 import { index as tasksIndex } from '@/routes/tasks';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Tasks',
-        href: tasksIndex(),
-        icon: ListChecks,
-    },
-];
+type BoardNavItem = {
+    id: number;
+    name: string;
+};
+
+const page = usePage();
+const { isCurrentUrl } = useCurrentUrl();
+
+const boards = computed(() => {
+    const items = page.props.boards as BoardNavItem[] | undefined;
+    return items ?? [];
+});
+
+const selectedBoardId = computed(() => {
+    const fromProps = page.props.selectedBoardId as number | null | undefined;
+
+    if (fromProps) {
+        return fromProps;
+    }
+
+    const url = new URL(page.url, window.location.origin);
+    const boardId = Number(url.searchParams.get('board'));
+
+    return Number.isFinite(boardId) && boardId > 0 ? boardId : null;
+});
 
 const footerNavItems: NavItem[] = [
     {
@@ -60,7 +77,48 @@ const footerNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <SidebarMenu class="px-2 py-0">
+                <SidebarMenuItem>
+                    <SidebarMenuButton
+                        as-child
+                        :is-active="isCurrentUrl(dashboard())"
+                        tooltip="Dashboard"
+                    >
+                        <Link :href="dashboard()">
+                            <LayoutGrid />
+                            <span>Dashboard</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                    <SidebarMenuButton
+                        as-child
+                        :is-active="isCurrentUrl(tasksIndex())"
+                        tooltip="Tasks"
+                    >
+                        <Link :href="tasksIndex()">
+                            <ListChecks />
+                            <span>Tasks</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarMenuSub v-if="boards.length">
+                <SidebarMenuSubItem
+                    v-for="board in boards"
+                    :key="board.id"
+                >
+                    <SidebarMenuSubButton
+                        as-child
+                        size="sm"
+                        :is-active="selectedBoardId === board.id"
+                    >
+                        <Link :href="tasksIndex({ query: { board: board.id } })">
+                            <span>{{ board.name }}</span>
+                        </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+            </SidebarMenuSub>
         </SidebarContent>
 
         <SidebarFooter>

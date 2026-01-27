@@ -145,6 +145,10 @@ class TaskController extends Controller
             $data['completed_at'] = $data['is_completed'] ? now() : null;
         }
 
+        if (($data['is_completed'] ?? false) === true) {
+            $this->stopActiveTimer($task);
+        }
+
         $task->fill($data);
         $task->save();
 
@@ -207,6 +211,22 @@ class TaskController extends Controller
         return $effectiveStart->diffInSeconds($rangeEnd);
     }
 
+    private function stopActiveTimer(Task $task): void
+    {
+        $activeEntry = $task->activeTimeEntry()->first();
+
+        if (! $activeEntry) {
+            return;
+        }
+
+        $endedAt = now();
+
+        $activeEntry->update([
+            'ended_at' => $endedAt,
+            'duration_seconds' => $activeEntry->started_at->diffInSeconds($endedAt),
+        ]);
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -216,7 +236,15 @@ class TaskController extends Controller
             return;
         }
 
-        if ($columnSlug === 'done') {
+        $doneSlugs = [
+            'done',
+            'concluido',
+            'concluida',
+            'concluidos',
+            'concluidas',
+        ];
+
+        if (in_array($columnSlug, $doneSlugs, true)) {
             $data['is_completed'] = true;
             $data['completed_at'] = now();
 

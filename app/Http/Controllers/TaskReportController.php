@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskReportRequest;
-use App\Models\Task;
 use App\Models\TaskBoard;
 use App\Models\TimeEntry;
-use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -24,22 +22,19 @@ class TaskReportController extends Controller
             ? $board->columns()->pluck('id')->all()
             : [];
 
-        $tasks = Task::query()
+        $entries = TimeEntry::query()
             ->where('user_id', $user->id)
-            ->when($board, fn ($query) => $query->whereIn('task_column_id', $columnIds))
+            ->whereNotNull('ended_at')
+            ->where('started_at', '<', $rangeEnd)
+            ->where('ended_at', '>', $rangeStart)
+            ->when($board, fn ($query) => $query->whereHas(
+                'task',
+                fn ($taskQuery) => $taskQuery->whereIn('task_column_id', $columnIds),
+            ))
             ->with([
-                'activeTimeEntry',
-                'taskColumn',
-                'timeEntries' => function ($query) use ($rangeStart, $rangeEnd) {
-                    $query
-                        ->whereNotNull('ended_at')
-                        ->whereBetween('started_at', [$rangeStart, $rangeEnd])
-                        ->orderBy('started_at');
-                },
+                'task.taskColumn',
             ])
-            ->orderBy('task_column_id')
-            ->orderBy('sort_order')
-            ->orderByDesc('created_at')
+            ->orderBy('started_at')
             ->get();
 
         $fileName = sprintf(
@@ -48,7 +43,7 @@ class TaskReportController extends Controller
             $rangeEnd->toDateString(),
         );
 
-        return response()->streamDownload(function () use ($tasks, $rangeStart, $rangeEnd): void {
+        return response()->streamDownload(function () use ($entries, $rangeStart, $rangeEnd): void {
             $handle = fopen('php://output', 'w');
 
             fwrite($handle, "\xEF\xBB\xBF");
@@ -56,19 +51,44 @@ class TaskReportController extends Controller
             fputcsv($handle, [
                 'Task',
                 'Status',
+                'Day',
+                'Play',
+                'Pause',
                 'Total (minutes)',
                 'Total (hours)',
             ], ';');
 
-            foreach ($tasks as $task) {
-                $seconds = $this->sumDurationForRange($task, $rangeStart, $rangeEnd);
+            foreach ($entries as $entry) {
+                $task = $entry->task;
+                $statusValue = $task?->taskColumn?->name ?? 'Backlog';
+                $entryStart = $entry->started_at;
+                $entryEnd = $entry->ended_at;
+
+                if (! $task || ! $entryStart || ! $entryEnd) {
+                    continue;
+                }
+
+                $effectiveStart = $entryStart->greaterThan($rangeStart)
+                    ? $entryStart
+                    : $rangeStart;
+                $effectiveEnd = $entryEnd->lessThan($rangeEnd)
+                    ? $entryEnd
+                    : $rangeEnd;
+
+                if ($effectiveEnd->lessThanOrEqualTo($effectiveStart)) {
+                    continue;
+                }
+
+                $seconds = $effectiveStart->diffInSeconds($effectiveEnd);
                 $minutes = round($seconds / 60, 2);
                 $hours = round($seconds / 3600, 2);
-                $statusValue = $task->taskColumn?->name ?? 'Backlog';
 
                 fputcsv($handle, [
                     $task->title,
                     Str::of($statusValue)->title()->toString(),
+                    $entryStart->format('d/m/Y'),
+                    $entryStart->format('H:i:s'),
+                    $entryEnd->format('H:i:s'),
                     $minutes,
                     $hours,
                 ], ';');
@@ -78,53 +98,6 @@ class TaskReportController extends Controller
         }, $fileName, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
-    }
-
-    private function sumDurationForRange(
-        Task $task,
-        CarbonInterface $rangeStart,
-        CarbonInterface $rangeEnd,
-    ): int {
-        $completedSeconds = $task->timeEntries
-            ->filter(function (TimeEntry $entry) use ($rangeStart, $rangeEnd) {
-                return $entry->started_at->betweenIncluded($rangeStart, $rangeEnd);
-            })
-            ->sum('duration_seconds');
-
-        $runningSeconds = 0;
-        $activeEntry = $task->activeTimeEntry;
-
-        if ($activeEntry) {
-            $runningSeconds = $this->runningSecondsForRange(
-                $activeEntry,
-                $rangeStart,
-                $rangeEnd,
-            );
-        }
-
-        return $completedSeconds + $runningSeconds;
-    }
-
-    private function runningSecondsForRange(
-        TimeEntry $entry,
-        CarbonInterface $rangeStart,
-        CarbonInterface $rangeEnd,
-    ): int {
-        $entryStart = $entry->started_at;
-
-        if ($entryStart->greaterThanOrEqualTo($rangeEnd)) {
-            return 0;
-        }
-
-        $effectiveStart = $entryStart->greaterThan($rangeStart)
-            ? $entryStart
-            : $rangeStart;
-
-        if ($effectiveStart->greaterThanOrEqualTo($rangeEnd)) {
-            return 0;
-        }
-
-        return $effectiveStart->diffInSeconds($rangeEnd);
     }
 
     private function resolveBoard($user, ?int $boardId): ?TaskBoard

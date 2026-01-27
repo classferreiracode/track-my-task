@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\TaskBoard;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -35,13 +36,40 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $boards = [];
+
+        if ($user) {
+            if (! $user->taskBoards()->exists()) {
+                $user->taskBoards()->create([
+                    'name' => 'Padrão',
+                    'slug' => 'padrao',
+                    'sort_order' => 1,
+                ]);
+            }
+
+            $boards = TaskBoard::query()
+                ->where('user_id', $user->id)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn (TaskBoard $board) => [
+                    'id' => $board->id,
+                    'name' => $board->name,
+                    'slug' => $board->slug,
+                    'sort_order' => $board->sort_order,
+                ])
+                ->values()
+                ->all();
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'boards' => $boards,
         ];
     }
 }
