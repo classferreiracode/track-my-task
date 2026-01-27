@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
 import TaskColumnController from '@/actions/App/Http/Controllers/TaskColumnController';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import TaskOrderController from '@/actions/App/Http/Controllers/TaskOrderController';
@@ -28,6 +29,13 @@ type TaskColumn = {
     sort_order: number;
 };
 
+type TaskBoard = {
+    id: number;
+    name: string;
+    slug: string;
+    sort_order: number;
+};
+
 type Task = {
     id: number;
     title: string;
@@ -48,6 +56,8 @@ type Task = {
 };
 
 type Props = {
+    boards: TaskBoard[];
+    selectedBoardId: number | null;
     columns: TaskColumn[];
     tasks: Task[];
     reporting: {
@@ -161,6 +171,20 @@ const exportEnd = ref(props.reporting.as_of.slice(0, 10));
 
 const reportUrl = computed(() => tasksReport().url);
 
+const sortedBoards = computed(() =>
+    [...props.boards].sort((left, right) => left.sort_order - right.sort_order),
+);
+
+const activeBoardId = computed(
+    () => props.selectedBoardId ?? sortedBoards.value[0]?.id ?? null,
+);
+
+const activeBoard = computed(
+    () =>
+        sortedBoards.value.find((board) => board.id === activeBoardId.value) ??
+        null,
+);
+
 const sortedColumns = computed(() =>
     [...props.columns].sort((left, right) => left.sort_order - right.sort_order),
 );
@@ -192,16 +216,26 @@ const tasksByColumn = computed(() => {
 });
 
 const draggedTaskId = ref<number | null>(null);
+const draggedColumnId = ref<number | null>(null);
+const dragType = ref<'task' | 'column' | null>(null);
 
 const onDragStart = (task: Task) => {
     draggedTaskId.value = task.id;
+    dragType.value = 'task';
 };
 
 const onDragEnd = () => {
     draggedTaskId.value = null;
+    draggedColumnId.value = null;
+    dragType.value = null;
 };
 
-const reorderColumn = (columnId: number, targetTaskId?: number) => {
+const onColumnDragStart = (columnId: number) => {
+    draggedColumnId.value = columnId;
+    dragType.value = 'column';
+};
+
+const reorderColumnTasks = (columnId: number, targetTaskId?: number) => {
     if (!draggedTaskId.value) {
         return;
     }
@@ -238,11 +272,72 @@ const reorderColumn = (columnId: number, targetTaskId?: number) => {
 };
 
 const onDropColumn = (columnId: number) => {
-    reorderColumn(columnId);
+    if (dragType.value === 'column') {
+        reorderColumns(columnId);
+        return;
+    }
+
+    reorderColumnTasks(columnId);
 };
 
 const onDropTask = (columnId: number, taskId: number) => {
-    reorderColumn(columnId, taskId);
+    if (dragType.value === 'task') {
+        reorderColumnTasks(columnId, taskId);
+        return;
+    }
+
+    if (dragType.value === 'column') {
+        reorderColumns(columnId);
+    }
+};
+
+const reorderColumns = (targetColumnId: number) => {
+    if (!draggedColumnId.value) {
+        return;
+    }
+
+    if (!activeBoardId.value) {
+        return;
+    }
+
+    const orderedIds = sortedColumns.value.map((column) => column.id);
+    const movedId = draggedColumnId.value;
+    const existingIndex = orderedIds.indexOf(movedId);
+    if (existingIndex !== -1) {
+        orderedIds.splice(existingIndex, 1);
+    }
+
+    const targetIndex = orderedIds.indexOf(targetColumnId);
+    const insertIndex = targetIndex === -1 ? orderedIds.length : targetIndex;
+    orderedIds.splice(insertIndex, 0, movedId);
+
+    router.patch(
+        TaskColumnController.order().url,
+        {
+            task_board_id: activeBoardId.value,
+            ordered_ids: orderedIds,
+        },
+        { preserveScroll: true },
+    );
+
+    draggedColumnId.value = null;
+    dragType.value = null;
+};
+
+const onBoardChange = (event: Event) => {
+    const value = Number(
+        (event.target as HTMLSelectElement | null)?.value ?? 0,
+    );
+
+    if (!value) {
+        return;
+    }
+
+    router.get(
+        tasksIndex().url,
+        { board: value },
+        { preserveScroll: true },
+    );
 };
 </script>
 
@@ -271,6 +366,60 @@ const onDropTask = (columnId: number, taskId: number) => {
             <div class="grid gap-6 lg:grid-cols-3">
                 <Card>
                     <CardHeader>
+                        <CardTitle>Boards</CardTitle>
+                        <CardDescription>
+                            Troque o projeto ativo ou crie um novo.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="flex flex-col gap-4">
+                        <div class="grid gap-2">
+                            <label class="text-xs font-medium">
+                                Board ativo
+                            </label>
+                            <select
+                                class="border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                :value="activeBoardId ?? ''"
+                                @change="onBoardChange"
+                            >
+                                <option
+                                    v-for="board in sortedBoards"
+                                    :key="board.id"
+                                    :value="board.id"
+                                >
+                                    {{ board.name }}
+                                </option>
+                            </select>
+                        </div>
+                        <Form
+                            v-bind="TaskBoardController.store.form()"
+                            class="flex flex-col gap-3"
+                            v-slot="{ errors, processing, recentlySuccessful }"
+                        >
+                            <div class="grid gap-2">
+                                <Input
+                                    name="name"
+                                    placeholder="Nome do board"
+                                    required
+                                />
+                                <InputError :message="errors.name" />
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <Button type="submit" :disabled="processing">
+                                    Criar board
+                                </Button>
+                                <span
+                                    v-if="recentlySuccessful"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    Criado!
+                                </span>
+                            </div>
+                        </Form>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
                         <CardTitle>Nova tarefa</CardTitle>
                         <CardDescription>
                             Crie uma tarefa e mova no board.
@@ -282,6 +431,11 @@ const onDropTask = (columnId: number, taskId: number) => {
                             class="flex flex-col gap-4"
                             v-slot="{ errors, processing, recentlySuccessful }"
                         >
+                            <input
+                                type="hidden"
+                                name="task_board_id"
+                                :value="activeBoardId ?? ''"
+                            />
                             <div class="grid gap-2">
                                 <Input
                                     name="title"
@@ -324,6 +478,11 @@ const onDropTask = (columnId: number, taskId: number) => {
                     </CardHeader>
                     <CardContent>
                         <form class="flex flex-col gap-3" method="get" :action="reportUrl">
+                            <input
+                                type="hidden"
+                                name="task_board_id"
+                                :value="activeBoardId ?? ''"
+                            />
                             <div class="grid gap-2">
                                 <label class="text-xs font-medium">Início</label>
                                 <Input
@@ -362,6 +521,11 @@ const onDropTask = (columnId: number, taskId: number) => {
                             class="flex flex-col gap-4"
                             v-slot="{ errors, processing, recentlySuccessful }"
                         >
+                            <input
+                                type="hidden"
+                                name="task_board_id"
+                                :value="activeBoardId ?? ''"
+                            />
                             <div class="grid gap-2">
                                 <Input
                                     name="name"
@@ -417,15 +581,31 @@ const onDropTask = (columnId: number, taskId: number) => {
                 </Card>
             </div>
 
-            <div class="grid gap-4 lg:grid-cols-3">
+            <div class="h-14.5"></div>
+
+            <div class="flex items-center justify-center">
+                <h2 class="text-2xl font-semibold">
+                    Board: {{ activeBoard?.name ?? 'Padrão' }}
+                </h2>
+            </div>
+            <hr class="ml-4 flex-1 border-t border-muted" />
+
+            <div
+                class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]"
+            >
                 <div
                     v-for="column in sortedColumns"
                     :key="column.id"
-                    class="flex min-h-[420px] flex-col gap-3 rounded-xl border bg-muted/10 p-4"
+                    class="flex min-h-105 flex-col gap-3 rounded-xl border bg-muted/10 p-4"
                     @dragover.prevent
                     @drop="onDropColumn(column.id)"
                 >
-                    <div class="flex items-center justify-between">
+                    <div
+                        class="flex items-center justify-between"
+                        draggable="true"
+                        @dragstart="onColumnDragStart(column.id)"
+                        @dragend="onDragEnd"
+                    >
                         <div>
                             <h2 class="text-base font-semibold">
                                 {{ column.name }}
@@ -439,7 +619,13 @@ const onDropTask = (columnId: number, taskId: number) => {
                         </Badge>
                     </div>
 
-                    <div class="flex flex-1 flex-col gap-3">
+                    <div
+                        class="flex flex-1 flex-col gap-3 min-h-0"
+                        :class="{
+                            'max-h-105 overflow-y-auto pr-1 scrollbar-soft':
+                                (tasksByColumn[column.id]?.length ?? 0) > 3,
+                        }"
+                    >
                         <div
                             v-if="(tasksByColumn[column.id]?.length ?? 0) === 0"
                             class="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground"

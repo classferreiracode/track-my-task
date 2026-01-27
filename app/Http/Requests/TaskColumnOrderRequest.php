@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class TaskColumnStoreRequest extends FormRequest
+class TaskColumnOrderRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -15,11 +15,18 @@ class TaskColumnStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:40'],
             'task_board_id' => [
                 'required',
                 'integer',
                 Rule::exists('task_boards', 'id')->where(
+                    'user_id',
+                    $this->user()?->id,
+                ),
+            ],
+            'ordered_ids' => ['required', 'array', 'min:1'],
+            'ordered_ids.*' => [
+                'integer',
+                Rule::exists('task_columns', 'id')->where(
                     'user_id',
                     $this->user()?->id,
                 ),
@@ -35,10 +42,10 @@ class TaskColumnStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Please provide a column name.',
-            'name.max' => 'Column names must be 40 characters or fewer.',
             'task_board_id.required' => 'Please select a board.',
             'task_board_id.exists' => 'Please select a valid board.',
+            'ordered_ids.required' => 'Please provide an ordering.',
+            'ordered_ids.array' => 'Please provide a valid ordering.',
         ];
     }
 }

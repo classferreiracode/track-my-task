@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class TaskReportRequest extends FormRequest
 {
@@ -16,6 +17,14 @@ class TaskReportRequest extends FormRequest
         return [
             'start' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'end' => ['required', 'date_format:Y-m-d', 'after_or_equal:start'],
+            'task_board_id' => [
+                'sometimes',
+                'integer',
+                Rule::exists('task_boards', 'id')->where(
+                    'user_id',
+                    $this->user()?->id,
+                ),
+            ],
         ];
     }
 
@@ -33,6 +42,8 @@ class TaskReportRequest extends FormRequest
             'end.required' => 'Please select an end date.',
             'end.date_format' => 'End date must use the YYYY-MM-DD format.',
             'end.after_or_equal' => 'End date must be on or after the start date.',
+            'task_board_id.integer' => 'Please select a valid board.',
+            'task_board_id.exists' => 'Please select a valid board.',
         ];
     }
 }

@@ -56,6 +56,11 @@ class User extends Authenticatable
         return $this->hasMany(Task::class);
     }
 
+    public function taskBoards(): HasMany
+    {
+        return $this->hasMany(TaskBoard::class);
+    }
+
     public function taskColumns(): HasMany
     {
         return $this->hasMany(TaskColumn::class);

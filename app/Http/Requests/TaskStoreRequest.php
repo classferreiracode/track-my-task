@@ -17,6 +17,14 @@ class TaskStoreRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'task_board_id' => [
+                'sometimes',
+                'integer',
+                Rule::exists('task_boards', 'id')->where(
+                    'user_id',
+                    $this->user()?->id,
+                ),
+            ],
             'task_column_id' => [
                 'sometimes',
                 'integer',
@@ -39,6 +47,8 @@ class TaskStoreRequest extends FormRequest
             'title.required' => 'Please provide a task title.',
             'title.max' => 'Task titles must be 160 characters or fewer.',
             'description.max' => 'Descriptions must be 1000 characters or fewer.',
+            'task_board_id.integer' => 'Please select a valid board.',
+            'task_board_id.exists' => 'Please select a valid board.',
             'task_column_id.integer' => 'Please select a valid column.',
             'task_column_id.exists' => 'Please select a valid column.',
         ];

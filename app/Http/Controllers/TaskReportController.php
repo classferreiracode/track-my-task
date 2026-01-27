@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskReportRequest;
 use App\Models\Task;
+use App\Models\TaskBoard;
 use App\Models\TimeEntry;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Date;
@@ -18,8 +19,14 @@ class TaskReportController extends Controller
         $rangeStart = Date::parse($request->string('start')->toString())->startOfDay();
         $rangeEnd = Date::parse($request->string('end')->toString())->endOfDay();
 
+        $board = $this->resolveBoard($user, $request->integer('task_board_id'));
+        $columnIds = $board
+            ? $board->columns()->pluck('id')->all()
+            : [];
+
         $tasks = Task::query()
             ->where('user_id', $user->id)
+            ->when($board, fn ($query) => $query->whereIn('task_column_id', $columnIds))
             ->with([
                 'activeTimeEntry',
                 'taskColumn',
@@ -118,5 +125,30 @@ class TaskReportController extends Controller
         }
 
         return $effectiveStart->diffInSeconds($rangeEnd);
+    }
+
+    private function resolveBoard($user, ?int $boardId): ?TaskBoard
+    {
+        $query = $user->taskBoards()->orderBy('sort_order');
+
+        if ($boardId) {
+            $board = $query->whereKey($boardId)->first();
+
+            if ($board) {
+                return $board;
+            }
+        }
+
+        $board = $query->first();
+
+        if (! $board) {
+            $board = $user->taskBoards()->create([
+                'name' => 'Padrão',
+                'slug' => 'padrao',
+                'sort_order' => 1,
+            ]);
+        }
+
+        return $board;
     }
 }

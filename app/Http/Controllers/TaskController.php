@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\TaskStoreRequest;
 use App\Http\Requests\TaskUpdateRequest;
 use App\Models\Task;
+use App\Models\TaskBoard;
 use App\Models\TaskColumn;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -21,15 +22,20 @@ class TaskController extends Controller
     {
         $this->authorize('viewAny', Task::class);
 
-        $columns = $this->ensureDefaultColumns($request->user());
+        $boards = $this->ensureDefaultBoards($request->user());
+        $selectedBoard = $this->resolveBoard($boards, $request->integer('board'));
+        $columns = $this->ensureDefaultColumns($request->user(), $selectedBoard);
 
         $now = now();
         $dayStart = $now->startOfDay();
         $weekStart = $now->startOfWeek();
         $monthStart = $now->startOfMonth();
 
+        $columnIds = $columns->pluck('id')->all();
+
         $tasks = Task::query()
             ->where('user_id', $request->user()->id)
+            ->whereIn('task_column_id', $columnIds)
             ->with([
                 'activeTimeEntry',
                 'taskColumn',
@@ -71,6 +77,13 @@ class TaskController extends Controller
             ->values();
 
         return Inertia::render('tasks/Index', [
+            'boards' => $boards->map(fn (TaskBoard $board) => [
+                'id' => $board->id,
+                'name' => $board->name,
+                'slug' => $board->slug,
+                'sort_order' => $board->sort_order,
+            ])->values(),
+            'selectedBoardId' => $selectedBoard?->id,
             'columns' => $columns->map(fn (TaskColumn $column) => [
                 'id' => $column->id,
                 'name' => $column->name,
@@ -94,7 +107,12 @@ class TaskController extends Controller
         $data = $request->validated();
 
         if (! array_key_exists('task_column_id', $data)) {
-            $defaultColumn = $this->ensureDefaultColumns($request->user())->first();
+            $boards = $this->ensureDefaultBoards($request->user());
+            $selectedBoard = $this->resolveBoard(
+                $boards,
+                $request->integer('task_board_id') ?: $request->integer('board'),
+            );
+            $defaultColumn = $this->ensureDefaultColumns($request->user(), $selectedBoard)->first();
             $data['task_column_id'] = $defaultColumn?->id;
         }
 
@@ -212,7 +230,7 @@ class TaskController extends Controller
     /**
      * @return Collection<int, TaskColumn>
      */
-    private function ensureDefaultColumns(User $user): Collection
+    private function ensureDefaultColumns(User $user, ?TaskBoard $board): Collection
     {
         $defaults = [
             ['name' => 'Backlog', 'slug' => 'backlog'],
@@ -220,17 +238,28 @@ class TaskController extends Controller
             ['name' => 'Concluídas', 'slug' => 'done'],
         ];
 
+        if (! $board) {
+            return collect();
+        }
+
         foreach ($defaults as $index => $column) {
             $user->taskColumns()->firstOrCreate(
-                ['slug' => $column['slug']],
+                [
+                    'slug' => $column['slug'],
+                    'task_board_id' => $board->id,
+                ],
                 [
                     'name' => $column['name'],
                     'sort_order' => $index + 1,
+                    'task_board_id' => $board->id,
                 ],
             );
         }
 
-        return $user->taskColumns()->orderBy('sort_order')->get();
+        return $user->taskColumns()
+            ->where('task_board_id', $board->id)
+            ->orderBy('sort_order')
+            ->get();
     }
 
     /**
@@ -246,8 +275,7 @@ class TaskController extends Controller
             }
         }
 
-        $legacySlug = $task->status ?: 'backlog';
-        $column = $columns->firstWhere('slug', $legacySlug) ?? $columns->first();
+        $column = $columns->first();
 
         if ($column) {
             $task->task_column_id = $column->id;
@@ -255,5 +283,37 @@ class TaskController extends Controller
         }
 
         return $column;
+    }
+
+    /**
+     * @return Collection<int, TaskBoard>
+     */
+    private function ensureDefaultBoards(User $user): Collection
+    {
+        if (! $user->taskBoards()->exists()) {
+            $user->taskBoards()->create([
+                'name' => 'Padrão',
+                'slug' => 'padrao',
+                'sort_order' => 1,
+            ]);
+        }
+
+        return $user->taskBoards()->orderBy('sort_order')->get();
+    }
+
+    /**
+     * @param  Collection<int, TaskBoard>  $boards
+     */
+    private function resolveBoard(Collection $boards, ?int $boardId): ?TaskBoard
+    {
+        if ($boardId) {
+            $board = $boards->firstWhere('id', $boardId);
+
+            if ($board) {
+                return $board;
+            }
+        }
+
+        return $boards->first();
     }
 }
