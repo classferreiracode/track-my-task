@@ -2,7 +2,6 @@
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { ChevronsUpDown } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
-import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
 import TaskColumnController from '@/actions/App/Http/Controllers/TaskColumnController';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import TaskOrderController from '@/actions/App/Http/Controllers/TaskOrderController';
@@ -364,11 +363,11 @@ const setBoard = (boardId: number) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Tasks" />
 
-        <div class="flex flex-1 flex-col gap-6 p-4">
+        <div class="flex flex-1 flex-col gap-8 p-6">
             <div class="flex flex-col gap-1">
                 <Heading
                     title="Board de tarefas"
-                    description="Arraste os cards entre os status e acompanhe os relatórios."
+                    description="Arraste os cards entre status, acompanhe métricas e exporte relatórios."
                 />
                 <p class="text-xs text-muted-foreground">
                     Relatórios atualizados em {{ asOfLabel }}.
@@ -383,11 +382,11 @@ const setBoard = (boardId: number) => {
             </div>
 
             <div class="grid gap-6 lg:grid-cols-3">
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
                         <CardTitle>Boards</CardTitle>
                         <CardDescription>
-                            Troque o projeto ativo ou crie um novo.
+                            Troque o projeto ativo.
                         </CardDescription>
                     </CardHeader>
                     <CardContent class="flex flex-col gap-4">
@@ -421,35 +420,10 @@ const setBoard = (boardId: number) => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
-                        <Form
-                            v-bind="TaskBoardController.store.form()"
-                            class="flex flex-col gap-3"
-                            v-slot="{ errors, processing, recentlySuccessful }"
-                        >
-                            <div class="grid gap-2">
-                                <Input
-                                    name="name"
-                                    placeholder="Nome do board"
-                                    required
-                                />
-                                <InputError :message="errors.name" />
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <Button type="submit" :disabled="processing">
-                                    Criar board
-                                </Button>
-                                <span
-                                    v-if="recentlySuccessful"
-                                    class="text-sm text-muted-foreground"
-                                >
-                                    Criado!
-                                </span>
-                            </div>
-                        </Form>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
                         <CardTitle>Nova tarefa</CardTitle>
                         <CardDescription>
@@ -500,7 +474,7 @@ const setBoard = (boardId: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
                         <CardTitle>Exportar relatório</CardTitle>
                         <CardDescription>
@@ -539,7 +513,7 @@ const setBoard = (boardId: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
                         <CardTitle>Novo status</CardTitle>
                         <CardDescription>
@@ -580,7 +554,7 @@ const setBoard = (boardId: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
                         <CardTitle>Períodos padrão</CardTitle>
                         <CardDescription>
@@ -612,14 +586,17 @@ const setBoard = (boardId: number) => {
                 </Card>
             </div>
 
-            <div class="h-14.5"></div>
+            <div class="h-10"></div>
 
-            <div class="flex items-center justify-center">
-                <h2 class="text-2xl font-semibold">
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="text-2xl font-semibold tracking-tight">
                     Board: {{ activeBoard?.name ?? 'Padrão' }}
                 </h2>
+                <span class="rounded-full border border-border/70 bg-card/70 px-3 py-1 text-xs text-muted-foreground">
+                    {{ sortedColumns.length }} status
+                </span>
             </div>
-            <hr class="ml-4 flex-1 border-t border-muted" />
+            <hr class="border-t border-border/70" />
 
             <div
                 class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]"
@@ -627,7 +604,7 @@ const setBoard = (boardId: number) => {
                 <div
                     v-for="column in sortedColumns"
                     :key="column.id"
-                    class="flex min-h-105 flex-col gap-3 rounded-xl border bg-muted/10 p-4"
+                    class="flex min-h-105 flex-col gap-3 rounded-xl border border-border/70 bg-card/70 p-4 shadow-sm"
                     @dragover.prevent
                     @drop="onDropColumn(column.id)"
                 >
@@ -667,7 +644,7 @@ const setBoard = (boardId: number) => {
                         <div
                             v-for="task in tasksByColumn[column.id]"
                             :key="task.id"
-                            class="rounded-lg border bg-card p-4 shadow-sm"
+                            class="rounded-lg border border-border/70 bg-card/90 p-4 shadow-sm"
                             draggable="true"
                             @dragstart="onDragStart(task)"
                             @dragend="onDragEnd"

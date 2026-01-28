@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import {
+    Activity,
+    CalendarCheck,
+    Clock,
+    ListChecks,
+} from 'lucide-vue-next';
 import { computed } from 'vue';
+import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +17,8 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import InputError from '@/components/InputError.vue';
+import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import { index as tasksIndex } from '@/routes/tasks';
@@ -32,6 +41,7 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+const page = usePage();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -61,6 +71,23 @@ const formatSeconds = (seconds: number) => {
 
     return parts.join(' ');
 };
+
+const boardErrors = computed(() => {
+    const errors = page.props.errors as Record<string, string> | undefined;
+    return {
+        name: errors?.name,
+    };
+});
+
+const chartItems = computed(() => [
+    { label: 'Hoje', value: props.kpi.seconds_today },
+    { label: 'Semana', value: props.kpi.seconds_week },
+    { label: 'Mês', value: props.kpi.seconds_month },
+]);
+
+const chartMax = computed(() =>
+    Math.max(1, ...chartItems.value.map((item) => item.value)),
+);
 </script>
 
 <template>
@@ -72,22 +99,25 @@ const formatSeconds = (seconds: number) => {
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 class="text-2xl font-semibold tracking-tight">
-                            Dashboard overview
+                            Visão executiva
                         </h1>
                         <p class="text-sm text-muted-foreground">
                             KPIs atualizados em {{ asOfLabel }}.
                         </p>
                     </div>
-                    <Button as-child variant="outline">
-                        <Link :href="tasksIndex()">Ver tarefas</Link>
+                    <Button as-child>
+                        <Link :href="tasksIndex()">Abrir board</Link>
                     </Button>
                 </div>
             </div>
 
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader class="pb-2">
-                        <CardDescription>Tarefas totais</CardDescription>
+                        <div class="flex items-center justify-between">
+                            <CardDescription>Tarefas totais</CardDescription>
+                            <ListChecks class="size-4 text-muted-foreground" />
+                        </div>
                         <CardTitle class="text-3xl font-semibold">
                             {{ kpi.total_tasks }}
                         </CardTitle>
@@ -97,9 +127,12 @@ const formatSeconds = (seconds: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader class="pb-2">
-                        <CardDescription>Timers ativos</CardDescription>
+                        <div class="flex items-center justify-between">
+                            <CardDescription>Timers ativos</CardDescription>
+                            <Activity class="size-4 text-muted-foreground" />
+                        </div>
                         <CardTitle class="text-3xl font-semibold">
                             {{ kpi.active_timers }}
                         </CardTitle>
@@ -117,9 +150,12 @@ const formatSeconds = (seconds: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader class="pb-2">
-                        <CardDescription>Horas hoje</CardDescription>
+                        <div class="flex items-center justify-between">
+                            <CardDescription>Horas hoje</CardDescription>
+                            <Clock class="size-4 text-muted-foreground" />
+                        </div>
                         <CardTitle class="text-3xl font-semibold">
                             {{ formatSeconds(kpi.seconds_today) }}
                         </CardTitle>
@@ -129,9 +165,12 @@ const formatSeconds = (seconds: number) => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader class="pb-2">
-                        <CardDescription>Horas esta semana</CardDescription>
+                        <div class="flex items-center justify-between">
+                            <CardDescription>Horas esta semana</CardDescription>
+                            <CalendarCheck class="size-4 text-muted-foreground" />
+                        </div>
                         <CardTitle class="text-3xl font-semibold">
                             {{ formatSeconds(kpi.seconds_week) }}
                         </CardTitle>
@@ -142,7 +181,65 @@ const formatSeconds = (seconds: number) => {
                 </Card>
             </div>
 
-            <Card>
+            <div class="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+                <Card class="border-border/70 bg-card/80 shadow-sm">
+                    <CardHeader>
+                        <CardTitle>Novo board</CardTitle>
+                        <CardDescription>
+                            Crie projetos para organizar o trabalho do time.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Form
+                            v-bind="TaskBoardController.store.form()"
+                            class="flex flex-col gap-4"
+                            v-slot="{ processing, recentlySuccessful }"
+                        >
+                            <div class="grid gap-2">
+                                <Input
+                                    name="name"
+                                    placeholder="Nome do board"
+                                    required
+                                />
+                                <InputError :message="boardErrors.name" />
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <Button type="submit" :disabled="processing">
+                                    Criar board
+                                </Button>
+                                <span
+                                    v-if="recentlySuccessful"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    Criado!
+                                </span>
+                            </div>
+                        </Form>
+                    </CardContent>
+                </Card>
+
+                <Card class="border-border/70 bg-card/80 shadow-sm">
+                    <CardHeader>
+                        <CardTitle>Acoes rapidas</CardTitle>
+                        <CardDescription>
+                            Acesse o board para detalhar tarefas e horas.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="flex flex-col gap-3 text-sm text-muted-foreground">
+                            <p>
+                                Use o menu lateral para alternar entre boards e manter a
+                                equipe alinhada.
+                            </p>
+                            <Button as-child variant="outline">
+                                <Link :href="tasksIndex()">Abrir board</Link>
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card class="border-border/70 bg-card/80 shadow-sm">
                 <CardHeader>
                     <CardTitle>Resumo mensal</CardTitle>
                     <CardDescription>
@@ -151,7 +248,7 @@ const formatSeconds = (seconds: number) => {
                 </CardHeader>
                 <CardContent>
                     <div class="flex flex-col gap-4 md:flex-row md:items-center">
-                        <div class="flex-1 rounded-lg border bg-muted/30 p-4">
+                        <div class="flex-1 rounded-lg border border-border/70 bg-muted/30 p-4">
                             <div class="text-xs uppercase text-muted-foreground">
                                 Horas no mês
                             </div>
@@ -165,6 +262,39 @@ const formatSeconds = (seconds: number) => {
                         <div class="flex-1 text-sm text-muted-foreground">
                             Use o painel de tarefas para detalhar o tempo por
                             projeto e acompanhar o progresso diário.
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card class="border-border/70 bg-card/80 shadow-sm">
+                <CardHeader>
+                    <CardTitle>Volume de horas</CardTitle>
+                    <CardDescription>
+                        Comparativo entre hoje, semana e mês.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div class="space-y-4">
+                        <div
+                            v-for="item in chartItems"
+                            :key="item.label"
+                            class="grid grid-cols-[80px_1fr_auto] items-center gap-3"
+                        >
+                            <span class="text-xs font-medium text-muted-foreground">
+                                {{ item.label }}
+                            </span>
+                            <div class="h-2.5 rounded-full bg-muted/50">
+                                <div
+                                    class="h-2.5 rounded-full bg-primary/80"
+                                    :style="{
+                                        width: `${Math.round((item.value / chartMax) * 100)}%`,
+                                    }"
+                                ></div>
+                            </div>
+                            <span class="text-xs font-medium">
+                                {{ formatSeconds(item.value) }}
+                            </span>
                         </div>
                     </div>
                 </CardContent>
