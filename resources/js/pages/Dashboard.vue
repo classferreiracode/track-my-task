@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
+import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,7 +18,6 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import InputError from '@/components/InputError.vue';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
@@ -220,7 +220,7 @@ const chartMax = computed(() =>
 
                 <Card class="border-border/70 bg-card/80 shadow-sm">
                     <CardHeader>
-                        <CardTitle>Acoes rapidas</CardTitle>
+                        <CardTitle>Ações rápidas</CardTitle>
                         <CardDescription>
                             Acesse o board para detalhar tarefas e horas.
                         </CardDescription>

@@ -38,6 +38,8 @@ class TaskController extends Controller
             ->whereIn('task_column_id', $columnIds)
             ->with([
                 'activeTimeEntry',
+                'labels',
+                'tags',
                 'taskColumn',
                 'timeEntries' => function ($query) use ($monthStart, $now) {
                     $query
@@ -57,10 +59,23 @@ class TaskController extends Controller
                     'id' => $task->id,
                     'title' => $task->title,
                     'description' => $task->description,
+                    'priority' => $task->priority,
+                    'starts_at' => $task->starts_at?->toDateString(),
+                    'ends_at' => $task->ends_at?->toDateString(),
                     'column_id' => $task->task_column_id ?? $column?->id,
                     'sort_order' => $task->sort_order,
                     'is_completed' => $task->is_completed,
                     'completed_at' => $task->completed_at?->toIso8601String(),
+                    'labels' => $task->labels->map(fn ($label) => [
+                        'id' => $label->id,
+                        'name' => $label->name,
+                        'color' => $label->color,
+                    ])->values(),
+                    'tags' => $task->tags->map(fn ($tag) => [
+                        'id' => $tag->id,
+                        'name' => $tag->name,
+                        'color' => $tag->color,
+                    ])->values(),
                     'active_entry' => $task->activeTimeEntry
                         ? [
                             'id' => $task->activeTimeEntry->id,
@@ -90,6 +105,24 @@ class TaskController extends Controller
                 'slug' => $column->slug,
                 'sort_order' => $column->sort_order,
             ])->values(),
+            'labels' => $request->user()->taskLabels()
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($label) => [
+                    'id' => $label->id,
+                    'name' => $label->name,
+                    'color' => $label->color,
+                ])
+                ->values(),
+            'tags' => $request->user()->taskTags()
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($tag) => [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                    'color' => $tag->color,
+                ])
+                ->values(),
             'tasks' => $tasks,
             'reporting' => [
                 'day_start' => $dayStart->toDateString(),
@@ -105,6 +138,10 @@ class TaskController extends Controller
         $this->authorize('create', Task::class);
 
         $data = $request->validated();
+        $labels = $data['labels'] ?? null;
+        $tags = $data['tags'] ?? null;
+
+        unset($data['labels'], $data['tags']);
 
         if (! array_key_exists('task_column_id', $data)) {
             $boards = $this->ensureDefaultBoards($request->user());
@@ -123,7 +160,15 @@ class TaskController extends Controller
                 ->max('sort_order') + 1;
         }
 
-        $request->user()->tasks()->create($data);
+        $task = $request->user()->tasks()->create($data);
+
+        if (is_array($labels)) {
+            $task->labels()->sync($labels);
+        }
+
+        if (is_array($tags)) {
+            $task->tags()->sync($tags);
+        }
 
         return back();
     }
@@ -133,6 +178,10 @@ class TaskController extends Controller
         $this->authorize('update', $task);
 
         $data = $request->validated();
+        $labels = $data['labels'] ?? null;
+        $tags = $data['tags'] ?? null;
+
+        unset($data['labels'], $data['tags']);
 
         if (array_key_exists('task_column_id', $data)) {
             $column = $request->user()
@@ -151,6 +200,14 @@ class TaskController extends Controller
 
         $task->fill($data);
         $task->save();
+
+        if (is_array($labels)) {
+            $task->labels()->sync($labels);
+        }
+
+        if (is_array($tags)) {
+            $task->tags()->sync($tags);
+        }
 
         return back();
     }

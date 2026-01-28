@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Form, Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, ListChecks } from 'lucide-vue-next';
+import {  Folder, LayoutGrid, ListChecks } from 'lucide-vue-next';
 import { computed } from 'vue';
 import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
+import InputError from '@/components/InputError.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavUser from '@/components/NavUser.vue';
-import InputError from '@/components/InputError.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     Sidebar,
     SidebarContent,
@@ -20,8 +22,7 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { dashboard } from '@/routes';
 import { index as tasksIndex } from '@/routes/tasks';
@@ -64,13 +65,8 @@ const boardErrors = computed(() => {
 const footerNavItems: NavItem[] = [
     {
         title: 'Github Repo',
-        href: 'https://github.com/laravel/vue-starter-kit',
+        href: 'https://github.com/classferreiracode',
         icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
     },
 ];
 </script>

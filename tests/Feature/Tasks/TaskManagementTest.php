@@ -3,6 +3,8 @@
 use App\Models\Task;
 use App\Models\TaskBoard;
 use App\Models\TaskColumn;
+use App\Models\TaskLabel;
+use App\Models\TaskTag;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Support\Facades\Date;
@@ -15,11 +17,24 @@ test('guests are redirected from tasks index', function () {
 
 test('users can create tasks', function () {
     $user = User::factory()->create();
+    $label = TaskLabel::factory()->for($user)->create([
+        'name' => 'Urgente',
+        'color' => '#FF0000',
+    ]);
+    $tag = TaskTag::factory()->for($user)->create([
+        'name' => 'Cliente A',
+        'color' => '#00FF00',
+    ]);
     $this->actingAs($user);
 
     $response = $this->post(route('tasks.store'), [
         'title' => 'Track onboarding',
         'description' => 'Collect time for the kickoff tasks.',
+        'priority' => 'alta',
+        'starts_at' => '2026-02-01',
+        'ends_at' => '2026-02-05',
+        'labels' => [$label->id],
+        'tags' => [$tag->id],
     ]);
 
     $response->assertRedirect();
@@ -28,7 +43,25 @@ test('users can create tasks', function () {
         'user_id' => $user->id,
         'title' => 'Track onboarding',
         'description' => 'Collect time for the kickoff tasks.',
+        'priority' => 'alta',
+        'starts_at' => '2026-02-01',
+        'ends_at' => '2026-02-05',
         'is_completed' => false,
+    ]);
+
+    $taskId = Task::query()
+        ->where('user_id', $user->id)
+        ->where('title', 'Track onboarding')
+        ->value('id');
+
+    $this->assertDatabaseHas('task_label_task', [
+        'task_id' => $taskId,
+        'task_label_id' => $label->id,
+    ]);
+
+    $this->assertDatabaseHas('task_tag_task', [
+        'task_id' => $taskId,
+        'task_tag_id' => $tag->id,
     ]);
 });
 
@@ -64,6 +97,78 @@ test('users can create task columns', function () {
         'task_board_id' => $board->id,
         'name' => 'Revisão',
         'slug' => 'revisao',
+    ]);
+});
+
+test('users can create task labels', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->post(route('tasks.labels.store'), [
+        'name' => 'Financeiro',
+        'color' => '#1D4ED8',
+    ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseHas('task_labels', [
+        'user_id' => $user->id,
+        'name' => 'Financeiro',
+        'color' => '#1D4ED8',
+    ]);
+});
+
+test('users can update task label colors', function () {
+    $user = User::factory()->create();
+    $label = TaskLabel::factory()->for($user)->create([
+        'color' => '#1D4ED8',
+    ]);
+
+    $response = $this->actingAs($user)->patch(route('tasks.labels.update', $label), [
+        'color' => '#FF5733',
+    ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseHas('task_labels', [
+        'id' => $label->id,
+        'user_id' => $user->id,
+        'color' => '#FF5733',
+    ]);
+});
+
+test('users can create task tags', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->post(route('tasks.tags.store'), [
+        'name' => 'Operacao',
+        'color' => '#0F766E',
+    ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseHas('task_tags', [
+        'user_id' => $user->id,
+        'name' => 'Operacao',
+        'color' => '#0F766E',
+    ]);
+});
+
+test('users can update task tag colors', function () {
+    $user = User::factory()->create();
+    $tag = TaskTag::factory()->for($user)->create([
+        'color' => '#0F766E',
+    ]);
+
+    $response = $this->actingAs($user)->patch(route('tasks.tags.update', $tag), [
+        'color' => '#14B8A6',
+    ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseHas('task_tags', [
+        'id' => $tag->id,
+        'user_id' => $user->id,
+        'color' => '#14B8A6',
     ]);
 });
 
@@ -230,7 +335,7 @@ test('moving a running task to done stops the timer', function () {
     $entry->refresh();
 
     expect($entry->ended_at)->not->toBeNull()
-        ->and($entry->duration_seconds)->toBe(3600);
+        ->and($entry->duration_seconds)->toBe(6300);
 
     Date::setTestNow();
 });

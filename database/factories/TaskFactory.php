@@ -23,9 +23,12 @@ class TaskFactory extends Factory
             'task_column_id' => TaskColumn::factory()->state(
                 fn (array $attributes) => ['user_id' => $attributes['user_id']],
             ),
+            'starts_at' => fake()->optional()->date(),
+            'ends_at' => fake()->optional()->date(),
             'sort_order' => fake()->numberBetween(1, 20),
             'title' => fake()->sentence(4),
             'description' => fake()->optional()->paragraph(),
+            'priority' => 'normal',
             'is_completed' => false,
             'completed_at' => null,
         ];
