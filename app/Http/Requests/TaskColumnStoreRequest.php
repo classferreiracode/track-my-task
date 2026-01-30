@@ -19,10 +19,7 @@ class TaskColumnStoreRequest extends FormRequest
             'task_board_id' => [
                 'required',
                 'integer',
-                Rule::exists('task_boards', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_boards', 'id'),
             ],
         ];
     }

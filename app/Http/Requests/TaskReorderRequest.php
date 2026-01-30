@@ -18,18 +18,12 @@ class TaskReorderRequest extends FormRequest
             'column_id' => [
                 'required',
                 'integer',
-                Rule::exists('task_columns', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_columns', 'id'),
             ],
             'ordered_ids' => ['required', 'array', 'min:1'],
             'ordered_ids.*' => [
                 'integer',
-                Rule::exists('tasks', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('tasks', 'id'),
             ],
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskColumnOrderRequest;
 use App\Http\Requests\TaskColumnStoreRequest;
+use App\Models\TaskBoard;
 use App\Models\TaskColumn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -15,6 +16,17 @@ class TaskColumnController extends Controller
     {
         $user = $request->user();
         $boardId = $request->integer('task_board_id');
+        $board = TaskBoard::query()->whereKey($boardId)->first();
+
+        if (! $board) {
+            return back()->withErrors([
+                'task_board_id' => 'Please select a valid board.',
+            ]);
+        }
+
+        if (! $user->hasWorkspaceRole($board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(403);
+        }
 
         $name = $request->string('name')->trim()->toString();
         $slug = Str::slug($name);
@@ -24,7 +36,6 @@ class TaskColumnController extends Controller
         }
 
         $existing = TaskColumn::query()
-            ->where('user_id', $user->id)
             ->where('task_board_id', $boardId)
             ->where('slug', $slug)
             ->exists();
@@ -36,11 +47,11 @@ class TaskColumnController extends Controller
         }
 
         $nextOrder = TaskColumn::query()
-            ->where('user_id', $user->id)
             ->where('task_board_id', $boardId)
             ->max('sort_order');
 
-        $user->taskColumns()->create([
+        TaskColumn::query()->create([
+            'user_id' => $user->id,
             'name' => $name,
             'slug' => $slug,
             'sort_order' => $nextOrder ? $nextOrder + 1 : 1,
@@ -58,8 +69,20 @@ class TaskColumnController extends Controller
             $request->input('ordered_ids', []),
         ));
 
+        $board = TaskBoard::query()->whereKey($boardId)->first();
+
+        if (! $board) {
+            return back()->withErrors([
+                'task_board_id' => 'Please select a valid board.',
+            ]);
+        }
+
+        if (! $user->hasWorkspaceRole($board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(403);
+        }
+
         /** @var Collection<int, TaskColumn> $columns */
-        $columns = $user->taskColumns()
+        $columns = TaskColumn::query()
             ->where('task_board_id', $boardId)
             ->whereIn('id', $orderedIds)
             ->get()

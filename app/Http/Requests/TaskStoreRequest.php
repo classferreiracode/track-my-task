@@ -35,18 +35,12 @@ class TaskStoreRequest extends FormRequest
             'task_board_id' => [
                 'sometimes',
                 'integer',
-                Rule::exists('task_boards', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_boards', 'id'),
             ],
             'task_column_id' => [
                 'sometimes',
                 'integer',
-                Rule::exists('task_columns', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_columns', 'id'),
             ],
             'labels' => ['sometimes', 'array'],
             'labels.*' => [
@@ -64,6 +58,8 @@ class TaskStoreRequest extends FormRequest
                     $this->user()?->id,
                 ),
             ],
+            'assignees' => ['sometimes', 'array'],
+            'assignees.*' => ['integer', Rule::exists('users', 'id')],
         ];
     }
 
@@ -92,6 +88,9 @@ class TaskStoreRequest extends FormRequest
             'tags.array' => 'Tags must be an array.',
             'tags.*.integer' => 'Tags must be valid.',
             'tags.*.exists' => 'Tags must be valid.',
+            'assignees.array' => 'Assignees must be an array.',
+            'assignees.*.integer' => 'Assignees must be valid.',
+            'assignees.*.exists' => 'Assignees must be valid.',
         ];
     }
 }

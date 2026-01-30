@@ -20,10 +20,7 @@ class TaskReportRequest extends FormRequest
             'task_board_id' => [
                 'sometimes',
                 'integer',
-                Rule::exists('task_boards', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_boards', 'id'),
             ],
         ];
     }

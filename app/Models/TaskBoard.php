@@ -19,6 +19,7 @@ class TaskBoard extends Model
      */
     protected $fillable = [
         'user_id',
+        'workspace_id',
         'name',
         'slug',
         'sort_order',
@@ -39,6 +40,11 @@ class TaskBoard extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function workspace(): BelongsTo
+    {
+        return $this->belongsTo(Workspace::class);
     }
 
     public function columns(): HasMany

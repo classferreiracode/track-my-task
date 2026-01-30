@@ -15,6 +15,7 @@ class TaskBoardStoreRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:60'],
+            'workspace_id' => ['sometimes', 'integer'],
         ];
     }
 
@@ -28,6 +29,7 @@ class TaskBoardStoreRequest extends FormRequest
         return [
             'name.required' => 'Please provide a board name.',
             'name.max' => 'Board names must be 60 characters or fewer.',
+            'workspace_id.integer' => 'Please select a valid workspace.',
         ];
     }
 }

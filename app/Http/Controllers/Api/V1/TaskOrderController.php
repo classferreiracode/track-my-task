@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskReorderRequest;
+use App\Models\Task;
+use App\Models\TaskColumn;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 
@@ -17,13 +19,20 @@ class TaskOrderController extends Controller
 
         $orderedIds = array_values(array_unique($orderedIds));
 
-        $column = $user->taskColumns()->whereKey($columnId)->first();
+        $column = TaskColumn::query()
+            ->with('board')
+            ->whereKey($columnId)
+            ->first();
 
         if (! $column) {
             return response()->json([
                 'message' => 'Validation failed.',
                 'errors' => ['column_id' => ['Please select a valid column.']],
             ], 422);
+        }
+
+        if (! $user->hasWorkspaceRole($column->board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(404);
         }
 
         $doneSlugs = [
@@ -38,13 +47,25 @@ class TaskOrderController extends Controller
         $endedAt = $isCompleted ? now() : null;
 
         /** @var Collection<int, \App\Models\Task> $tasks */
-        $tasks = $user->tasks()
+        $tasks = Task::query()
             ->whereIn('id', $orderedIds)
-            ->with('activeTimeEntry')
+            ->with(['activeTimeEntry', 'taskColumn.board'])
             ->get()
             ->keyBy('id');
 
         if ($tasks->count() !== count($orderedIds)) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => ['ordered_ids' => ['Please provide a valid ordering.']],
+            ], 422);
+        }
+
+        $workspaceId = $column->board->workspace_id;
+        $invalidTask = $tasks->first(function ($task) use ($workspaceId) {
+            return $task->taskColumn?->board?->workspace_id !== $workspaceId;
+        });
+
+        if ($invalidTask) {
             return response()->json([
                 'message' => 'Validation failed.',
                 'errors' => ['ordered_ids' => ['Please provide a valid ordering.']],

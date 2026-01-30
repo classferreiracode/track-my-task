@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\TimeEntry;
 use Carbon\CarbonInterface;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         $now = now();
@@ -36,7 +37,20 @@ class DashboardController extends Controller
         $hoursThisWeek = $this->sumUserSecondsForRange($user->id, $weekStart, $now);
         $hoursThisMonth = $this->sumUserSecondsForRange($user->id, $monthStart, $now);
 
+        $workspaces = $user->workspaces()->orderBy('name')->get();
+
+        if ($workspaces->isEmpty()) {
+            return redirect()->route('onboarding.show');
+        }
+
         return Inertia::render('Dashboard', [
+            'workspaces' => $workspaces->map(fn ($workspace) => [
+                'id' => $workspace->id,
+                'name' => $workspace->name,
+                'slug' => $workspace->slug,
+                'role' => $workspace->pivot?->role,
+            ])->values(),
+            'selectedWorkspaceId' => $workspaces->first()?->id,
             'kpi' => [
                 'total_tasks' => $totalTasks,
                 'completed_tasks' => $completedTasks,

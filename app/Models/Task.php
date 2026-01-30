@@ -45,6 +45,7 @@ class Task extends Model
             'completed_at' => 'datetime',
             'starts_at' => 'date',
             'ends_at' => 'date',
+            'overdue_notified_at' => 'datetime',
         ];
     }
 
@@ -68,6 +69,16 @@ class Task extends Model
         return $this->hasOne(TimeEntry::class)->whereNull('ended_at');
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(TaskActivity::class);
+    }
+
     public function labels(): BelongsToMany
     {
         return $this->belongsToMany(TaskLabel::class, 'task_label_task');
@@ -76,5 +87,12 @@ class Task extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(TaskTag::class, 'task_tag_task');
+    }
+
+    public function assignees(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class)
+            ->withPivot(['assigned_by_user_id', 'assigned_at'])
+            ->withTimestamps();
     }
 }

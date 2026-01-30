@@ -18,18 +18,12 @@ class TaskColumnOrderRequest extends FormRequest
             'task_board_id' => [
                 'required',
                 'integer',
-                Rule::exists('task_boards', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_boards', 'id'),
             ],
             'ordered_ids' => ['required', 'array', 'min:1'],
             'ordered_ids.*' => [
                 'integer',
-                Rule::exists('task_columns', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_columns', 'id'),
             ],
         ];
     }

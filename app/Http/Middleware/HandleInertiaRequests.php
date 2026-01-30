@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\TaskBoard;
+use App\Models\Workspace;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -38,28 +39,43 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         $boards = [];
+        $workspaces = collect();
+        $notifications = collect();
+        $unreadCount = 0;
 
         if ($user) {
-            if (! $user->taskBoards()->exists()) {
-                $user->taskBoards()->create([
-                    'name' => 'Padrão',
-                    'slug' => 'padrao',
-                    'sort_order' => 1,
-                ]);
-            }
+            $workspaces = $user->workspaces()->orderBy('name')->get();
+            $activeWorkspace = $workspaces->first();
 
-            $boards = TaskBoard::query()
-                ->where('user_id', $user->id)
-                ->orderBy('sort_order')
+            $notifications = $user->notifications()
+                ->latest()
+                ->limit(10)
                 ->get()
-                ->map(fn (TaskBoard $board) => [
-                    'id' => $board->id,
-                    'name' => $board->name,
-                    'slug' => $board->slug,
-                    'sort_order' => $board->sort_order,
-                ])
-                ->values()
-                ->all();
+                ->map(fn ($notification) => [
+                    'id' => $notification->id,
+                    'type' => $notification->type,
+                    'data' => $notification->data,
+                    'read_at' => $notification->read_at?->toIso8601String(),
+                    'created_at' => $notification->created_at?->toIso8601String(),
+                ]);
+
+            $unreadCount = $user->unreadNotifications()->count();
+
+            if ($activeWorkspace) {
+                $boards = TaskBoard::query()
+                    ->where('workspace_id', $activeWorkspace->id)
+                    ->orderBy('sort_order')
+                    ->get()
+                    ->map(fn (TaskBoard $board) => [
+                        'id' => $board->id,
+                        'name' => $board->name,
+                        'slug' => $board->slug,
+                        'sort_order' => $board->sort_order,
+                        'user_id' => $board->user_id,
+                    ])
+                    ->values()
+                    ->all();
+            }
         }
 
         return [
@@ -68,8 +84,22 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user,
             ],
+            'flash' => [
+                'success' => $request->session()->get('success'),
+                'invitation' => $request->session()->get('invitation'),
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'boards' => $boards,
+            'workspaces' => $workspaces->map(fn (Workspace $workspace) => [
+                'id' => $workspace->id,
+                'name' => $workspace->name,
+                'slug' => $workspace->slug,
+                'role' => $workspace->pivot?->role,
+            ])->values(),
+            'notifications' => [
+                'items' => $notifications->values(),
+                'unread_count' => $unreadCount,
+            ],
         ];
     }
 }

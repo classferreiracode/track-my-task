@@ -4,27 +4,41 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskStoreRequest;
 use App\Http\Requests\TaskUpdateRequest;
+use App\Mail\TaskStatusMail;
 use App\Models\Task;
 use App\Models\TaskBoard;
 use App\Models\TaskColumn;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\Workspace;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class TaskController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $this->authorize('viewAny', Task::class);
 
-        $boards = $this->ensureDefaultBoards($request->user());
+        $user = $request->user();
+        $workspaces = $this->ensureDefaultWorkspace($user);
+
+        if ($workspaces->isEmpty()) {
+            return redirect()->route('onboarding.show');
+        }
+        $selectedWorkspace = $this->resolveWorkspace(
+            $workspaces,
+            $request->integer('workspace'),
+        );
+
+        $boards = $this->ensureDefaultBoards($selectedWorkspace);
         $selectedBoard = $this->resolveBoard($boards, $request->integer('board'));
-        $columns = $this->ensureDefaultColumns($request->user(), $selectedBoard);
+        $columns = $this->ensureDefaultColumns($selectedBoard);
 
         $now = now();
         $dayStart = $now->startOfDay();
@@ -34,10 +48,10 @@ class TaskController extends Controller
         $columnIds = $columns->pluck('id')->all();
 
         $tasks = Task::query()
-            ->where('user_id', $request->user()->id)
             ->whereIn('task_column_id', $columnIds)
             ->with([
                 'activeTimeEntry',
+                'assignees',
                 'labels',
                 'tags',
                 'taskColumn',
@@ -66,6 +80,11 @@ class TaskController extends Controller
                     'sort_order' => $task->sort_order,
                     'is_completed' => $task->is_completed,
                     'completed_at' => $task->completed_at?->toIso8601String(),
+                    'assignees' => $task->assignees->map(fn ($assignee) => [
+                        'id' => $assignee->id,
+                        'name' => $assignee->name,
+                        'email' => $assignee->email,
+                    ])->values(),
                     'labels' => $task->labels->map(fn ($label) => [
                         'id' => $label->id,
                         'name' => $label->name,
@@ -92,11 +111,19 @@ class TaskController extends Controller
             ->values();
 
         return Inertia::render('tasks/Index', [
+            'workspaces' => $workspaces->map(fn (Workspace $workspace) => [
+                'id' => $workspace->id,
+                'name' => $workspace->name,
+                'slug' => $workspace->slug,
+                'role' => $workspace->pivot?->role,
+            ])->values(),
+            'selectedWorkspaceId' => $selectedWorkspace?->id,
             'boards' => $boards->map(fn (TaskBoard $board) => [
                 'id' => $board->id,
                 'name' => $board->name,
                 'slug' => $board->slug,
                 'sort_order' => $board->sort_order,
+                'user_id' => $board->user_id,
             ])->values(),
             'selectedBoardId' => $selectedBoard?->id,
             'columns' => $columns->map(fn (TaskColumn $column) => [
@@ -105,7 +132,7 @@ class TaskController extends Controller
                 'slug' => $column->slug,
                 'sort_order' => $column->sort_order,
             ])->values(),
-            'labels' => $request->user()->taskLabels()
+            'labels' => $user->taskLabels()
                 ->orderBy('name')
                 ->get()
                 ->map(fn ($label) => [
@@ -114,7 +141,7 @@ class TaskController extends Controller
                     'color' => $label->color,
                 ])
                 ->values(),
-            'tags' => $request->user()->taskTags()
+            'tags' => $user->taskTags()
                 ->orderBy('name')
                 ->get()
                 ->map(fn ($tag) => [
@@ -123,6 +150,20 @@ class TaskController extends Controller
                     'color' => $tag->color,
                 ])
                 ->values(),
+            'members' => $selectedWorkspace
+                ? $selectedWorkspace->members()
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn ($member) => [
+                        'id' => $member->id,
+                        'name' => $member->name,
+                        'email' => $member->email,
+                        'role' => $member->pivot?->role,
+                        'weekly_capacity_minutes' => $member->pivot?->weekly_capacity_minutes,
+                        'is_active' => $member->pivot?->is_active,
+                    ])
+                    ->values()
+                : collect(),
             'tasks' => $tasks,
             'reporting' => [
                 'day_start' => $dayStart->toDateString(),
@@ -140,16 +181,26 @@ class TaskController extends Controller
         $data = $request->validated();
         $labels = $data['labels'] ?? null;
         $tags = $data['tags'] ?? null;
+        $assignees = $data['assignees'] ?? null;
 
-        unset($data['labels'], $data['tags']);
+        unset($data['labels'], $data['tags'], $data['assignees']);
 
         if (! array_key_exists('task_column_id', $data)) {
-            $boards = $this->ensureDefaultBoards($request->user());
+            $workspaces = $this->ensureDefaultWorkspace($request->user());
+
+            if ($workspaces->isEmpty()) {
+                return redirect()->route('onboarding.show');
+            }
+            $selectedWorkspace = $this->resolveWorkspace(
+                $workspaces,
+                $request->integer('workspace'),
+            );
+            $boards = $this->ensureDefaultBoards($selectedWorkspace);
             $selectedBoard = $this->resolveBoard(
                 $boards,
                 $request->integer('task_board_id') ?: $request->integer('board'),
             );
-            $defaultColumn = $this->ensureDefaultColumns($request->user(), $selectedBoard)->first();
+            $defaultColumn = $this->ensureDefaultColumns($selectedBoard)->first();
             $data['task_column_id'] = $defaultColumn?->id;
         }
 
@@ -158,6 +209,20 @@ class TaskController extends Controller
                 ->tasks()
                 ->where('task_column_id', $data['task_column_id'])
                 ->max('sort_order') + 1;
+        }
+
+        $board = TaskBoard::query()
+            ->with('workspace')
+            ->whereHas('columns', function ($query) use ($data) {
+                $query->where('id', $data['task_column_id'] ?? 0);
+            })
+            ->first();
+
+        if (! $board || ! $request->user()->hasWorkspaceRole(
+            $board->workspace_id,
+            ['owner', 'admin', 'editor', 'member'],
+        )) {
+            abort(403);
         }
 
         $task = $request->user()->tasks()->create($data);
@@ -170,6 +235,29 @@ class TaskController extends Controller
             $task->tags()->sync($tags);
         }
 
+        if (is_array($assignees)) {
+            $workspaceId = $this->workspaceIdForTask($task);
+            $assignees = $this->filterWorkspaceMembers($workspaceId, $assignees);
+            $task->assignees()->sync(
+                collect($assignees)->mapWithKeys(fn ($id) => [
+                    $id => [
+                        'assigned_by_user_id' => $request->user()->id,
+                        'assigned_at' => now(),
+                    ],
+                ])->all(),
+            );
+
+            $task->activities()->create([
+                'user_id' => $request->user()->id,
+                'type' => 'assigned',
+                'meta' => [
+                    'assignees' => $assignees,
+                ],
+            ]);
+
+            $this->sendAssignmentMail($task, $assignees, $board);
+        }
+
         return back();
     }
 
@@ -180,14 +268,22 @@ class TaskController extends Controller
         $data = $request->validated();
         $labels = $data['labels'] ?? null;
         $tags = $data['tags'] ?? null;
+        $assignees = $data['assignees'] ?? null;
 
-        unset($data['labels'], $data['tags']);
+        unset($data['labels'], $data['tags'], $data['assignees']);
 
         if (array_key_exists('task_column_id', $data)) {
-            $column = $request->user()
-                ->taskColumns()
+            $column = TaskColumn::query()
+                ->with('board')
                 ->whereKey($data['task_column_id'])
                 ->first();
+
+            if (! $column || ! $request->user()->hasWorkspaceRole(
+                $column->board->workspace_id,
+                ['owner', 'admin', 'editor', 'member'],
+            )) {
+                abort(403);
+            }
 
             $this->syncCompletionForColumn($data, $column?->slug);
         } elseif (array_key_exists('is_completed', $data)) {
@@ -207,6 +303,19 @@ class TaskController extends Controller
 
         if (is_array($tags)) {
             $task->tags()->sync($tags);
+        }
+
+        if (is_array($assignees)) {
+            $workspaceId = $this->workspaceIdForTask($task);
+            $assignees = $this->filterWorkspaceMembers($workspaceId, $assignees);
+            $task->assignees()->sync(
+                collect($assignees)->mapWithKeys(fn ($id) => [
+                    $id => [
+                        'assigned_by_user_id' => $request->user()->id,
+                        'assigned_at' => now(),
+                    ],
+                ])->all(),
+            );
         }
 
         return back();
@@ -315,12 +424,12 @@ class TaskController extends Controller
     /**
      * @return Collection<int, TaskColumn>
      */
-    private function ensureDefaultColumns(User $user, ?TaskBoard $board): Collection
+    private function ensureDefaultColumns(?TaskBoard $board): Collection
     {
         $defaults = [
             ['name' => 'Backlog', 'slug' => 'backlog'],
-            ['name' => 'Em progresso', 'slug' => 'in_progress'],
-            ['name' => 'Concluídas', 'slug' => 'done'],
+            ['name' => 'Em progresso', 'slug' => 'em-progresso'],
+            ['name' => 'Concluído', 'slug' => 'concluido'],
         ];
 
         if (! $board) {
@@ -328,12 +437,13 @@ class TaskController extends Controller
         }
 
         foreach ($defaults as $index => $column) {
-            $user->taskColumns()->firstOrCreate(
+            TaskColumn::query()->firstOrCreate(
                 [
                     'slug' => $column['slug'],
                     'task_board_id' => $board->id,
                 ],
                 [
+                    'user_id' => $board->user_id,
                     'name' => $column['name'],
                     'sort_order' => $index + 1,
                     'task_board_id' => $board->id,
@@ -341,7 +451,7 @@ class TaskController extends Controller
             );
         }
 
-        return $user->taskColumns()
+        return TaskColumn::query()
             ->where('task_board_id', $board->id)
             ->orderBy('sort_order')
             ->get();
@@ -373,17 +483,13 @@ class TaskController extends Controller
     /**
      * @return Collection<int, TaskBoard>
      */
-    private function ensureDefaultBoards(User $user): Collection
+    private function ensureDefaultBoards(?Workspace $workspace): Collection
     {
-        if (! $user->taskBoards()->exists()) {
-            $user->taskBoards()->create([
-                'name' => 'Padrão',
-                'slug' => 'padrao',
-                'sort_order' => 1,
-            ]);
+        if (! $workspace) {
+            return collect();
         }
 
-        return $user->taskBoards()->orderBy('sort_order')->get();
+        return $workspace->boards()->orderBy('sort_order')->get();
     }
 
     /**
@@ -400,5 +506,90 @@ class TaskController extends Controller
         }
 
         return $boards->first();
+    }
+
+    /**
+     * @return Collection<int, Workspace>
+     */
+    private function ensureDefaultWorkspace(User $user): Collection
+    {
+        return $user->workspaces()->orderBy('name')->get();
+    }
+
+    /**
+     * @param  Collection<int, Workspace>  $workspaces
+     */
+    private function resolveWorkspace(Collection $workspaces, ?int $workspaceId): ?Workspace
+    {
+        if ($workspaceId) {
+            $workspace = $workspaces->firstWhere('id', $workspaceId);
+            if ($workspace) {
+                return $workspace;
+            }
+        }
+
+        return $workspaces->first();
+    }
+
+    private function workspaceIdForTask(Task $task): ?int
+    {
+        $taskColumn = $task->taskColumn()->with('board')->first();
+
+        return $taskColumn?->board?->workspace_id;
+    }
+
+    /**
+     * @param  array<int, int>  $assignees
+     * @return array<int, int>
+     */
+    private function filterWorkspaceMembers(?int $workspaceId, array $assignees): array
+    {
+        if (! $workspaceId || $assignees === []) {
+            return [];
+        }
+
+        $workspace = Workspace::query()->whereKey($workspaceId)->first();
+
+        if (! $workspace) {
+            return [];
+        }
+
+        return $workspace->members()
+            ->whereIn('users.id', $assignees)
+            ->pluck('users.id')
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $assigneeIds
+     */
+    private function sendAssignmentMail(Task $task, array $assigneeIds, ?TaskBoard $board): void
+    {
+        if ($assigneeIds === []) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->whereIn('id', $assigneeIds)
+            ->pluck('email')
+            ->all();
+
+        if ($recipients === []) {
+            return;
+        }
+
+        $task->loadMissing(['taskColumn.board.workspace']);
+
+        $payload = [
+            'task_id' => $task->id,
+            'task_title' => $task->title,
+            'status' => $task->taskColumn?->name,
+            'board' => $board?->name ?? $task->taskColumn?->board?->name,
+            'workspace' => $board?->workspace?->name ?? $task->taskColumn?->board?->workspace?->name,
+            'due_date' => $task->ends_at?->toDateString(),
+            'assigned_by' => $task->user?->name,
+        ];
+
+        Mail::to($recipients)->queue(new TaskStatusMail('assigned', $payload));
     }
 }

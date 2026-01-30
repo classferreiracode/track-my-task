@@ -12,7 +12,15 @@ class TaskTimerController extends Controller
     public function store(Request $request, Task $task): JsonResponse
     {
         if ($task->user_id !== $request->user()->id) {
-            abort(404);
+            $workspaceId = $task->taskColumn?->board?->workspace_id
+                ?? $task->taskColumn()->with('board')->first()?->board?->workspace_id;
+
+            if (! $workspaceId || ! $request->user()->hasWorkspaceRole(
+                $workspaceId,
+                ['owner', 'admin', 'editor', 'member'],
+            )) {
+                abort(404);
+            }
         }
 
         $activeEntry = $task->activeTimeEntry()->first();
@@ -40,7 +48,15 @@ class TaskTimerController extends Controller
     public function update(Request $request, Task $task): JsonResponse
     {
         if ($task->user_id !== $request->user()->id) {
-            abort(404);
+            $workspaceId = $task->taskColumn?->board?->workspace_id
+                ?? $task->taskColumn()->with('board')->first()?->board?->workspace_id;
+
+            if (! $workspaceId || ! $request->user()->hasWorkspaceRole(
+                $workspaceId,
+                ['owner', 'admin', 'editor', 'member'],
+            )) {
+                abort(404);
+            }
         }
 
         $activeEntry = $task->activeTimeEntry()->first();

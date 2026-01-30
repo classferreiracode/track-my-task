@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\V1\TaskOrderController;
 use App\Http\Controllers\Api\V1\TaskReportController;
 use App\Http\Controllers\Api\V1\TaskTagController;
 use App\Http\Controllers\Api\V1\TaskTimerController;
+use App\Http\Controllers\Api\V1\WorkspaceController;
+use App\Http\Controllers\Api\V1\WorkspaceInvitationController;
+use App\Http\Controllers\Api\V1\WorkspaceMemberController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +19,13 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
+    Route::get('workspaces', [WorkspaceController::class, 'index']);
+    Route::post('workspaces', [WorkspaceController::class, 'store']);
+    Route::get('workspaces/{workspace}/members', [WorkspaceMemberController::class, 'index']);
+    Route::patch('workspaces/{workspace}/members/{user}', [WorkspaceMemberController::class, 'update']);
+    Route::post('workspaces/{workspace}/invitations', [WorkspaceInvitationController::class, 'store']);
+    Route::post('workspaces/invitations/{token}/accept', [WorkspaceInvitationController::class, 'accept']);
+
     Route::get('boards', [TaskBoardController::class, 'index']);
     Route::post('boards', [TaskBoardController::class, 'store']);
     Route::get('boards/{board}/columns', [TaskColumnController::class, 'index']);

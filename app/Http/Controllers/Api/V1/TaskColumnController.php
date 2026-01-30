@@ -17,7 +17,10 @@ class TaskColumnController extends Controller
 {
     public function index(Request $request, TaskBoard $board): JsonResponse
     {
-        if ($board->user_id !== $request->user()->id) {
+        if (! $request->user()->hasWorkspaceRole(
+            $board->workspace_id,
+            ['owner', 'admin', 'editor', 'member', 'viewer'],
+        )) {
             abort(404);
         }
 
@@ -32,6 +35,18 @@ class TaskColumnController extends Controller
     {
         $user = $request->user();
         $boardId = $request->integer('task_board_id');
+        $board = TaskBoard::query()->whereKey($boardId)->first();
+
+        if (! $board) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => ['task_board_id' => ['Please select a valid board.']],
+            ], 422);
+        }
+
+        if (! $user->hasWorkspaceRole($board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(404);
+        }
 
         $name = $request->string('name')->trim()->toString();
         $slug = Str::slug($name);
@@ -41,7 +56,6 @@ class TaskColumnController extends Controller
         }
 
         $existing = TaskColumn::query()
-            ->where('user_id', $user->id)
             ->where('task_board_id', $boardId)
             ->where('slug', $slug)
             ->exists();
@@ -54,11 +68,11 @@ class TaskColumnController extends Controller
         }
 
         $nextOrder = TaskColumn::query()
-            ->where('user_id', $user->id)
             ->where('task_board_id', $boardId)
             ->max('sort_order');
 
-        $column = $user->taskColumns()->create([
+        $column = TaskColumn::query()->create([
+            'user_id' => $user->id,
             'name' => $name,
             'slug' => $slug,
             'sort_order' => $nextOrder ? $nextOrder + 1 : 1,
@@ -78,8 +92,21 @@ class TaskColumnController extends Controller
             $request->input('ordered_ids', []),
         ));
 
+        $board = TaskBoard::query()->whereKey($boardId)->first();
+
+        if (! $board) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => ['task_board_id' => ['Please select a valid board.']],
+            ], 422);
+        }
+
+        if (! $user->hasWorkspaceRole($board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(404);
+        }
+
         /** @var Collection<int, TaskColumn> $columns */
-        $columns = $user->taskColumns()
+        $columns = TaskColumn::query()
             ->where('task_board_id', $boardId)
             ->whereIn('id', $orderedIds)
             ->get()

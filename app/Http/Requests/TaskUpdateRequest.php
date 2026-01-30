@@ -36,10 +36,7 @@ class TaskUpdateRequest extends FormRequest
             'task_column_id' => [
                 'sometimes',
                 'integer',
-                Rule::exists('task_columns', 'id')->where(
-                    'user_id',
-                    $this->user()?->id,
-                ),
+                Rule::exists('task_columns', 'id'),
             ],
             'labels' => ['sometimes', 'array'],
             'labels.*' => [
@@ -57,6 +54,8 @@ class TaskUpdateRequest extends FormRequest
                     $this->user()?->id,
                 ),
             ],
+            'assignees' => ['sometimes', 'array'],
+            'assignees.*' => ['integer', Rule::exists('users', 'id')],
         ];
     }
 
@@ -83,6 +82,9 @@ class TaskUpdateRequest extends FormRequest
             'tags.array' => 'Tags must be an array.',
             'tags.*.integer' => 'Tags must be valid.',
             'tags.*.exists' => 'Tags must be valid.',
+            'assignees.array' => 'Assignees must be an array.',
+            'assignees.*.integer' => 'Assignees must be valid.',
+            'assignees.*.exists' => 'Assignees must be valid.',
         ];
     }
 }

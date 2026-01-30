@@ -19,6 +19,7 @@ class TaskBoardResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'sort_order' => $this->sort_order,
+            'workspace_id' => $this->workspace_id,
             'columns' => TaskColumnResource::collection(
                 $this->whenLoaded('columns'),
             ),

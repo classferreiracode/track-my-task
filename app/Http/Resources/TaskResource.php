@@ -42,6 +42,13 @@ class TaskResource extends JsonResource
             'tags' => TaskTagResource::collection(
                 $this->whenLoaded('tags'),
             ),
+            'assignees' => $this->whenLoaded('assignees', function () {
+                return $this->assignees->map(fn ($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ])->values();
+            }),
         ];
     }
 }

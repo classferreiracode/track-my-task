@@ -102,26 +102,20 @@ class TaskReportController extends Controller
 
     private function resolveBoard($user, ?int $boardId): ?TaskBoard
     {
-        $query = $user->taskBoards()->orderBy('sort_order');
-
         if ($boardId) {
-            $board = $query->whereKey($boardId)->first();
+            $board = TaskBoard::query()->whereKey($boardId)->first();
 
-            if ($board) {
+            if ($board && $user->hasWorkspaceRole(
+                $board->workspace_id,
+                ['owner', 'admin', 'editor', 'member', 'viewer'],
+            )) {
                 return $board;
             }
         }
 
-        $board = $query->first();
-
-        if (! $board) {
-            $board = $user->taskBoards()->create([
-                'name' => 'Padrão',
-                'slug' => 'padrao',
-                'sort_order' => 1,
-            ]);
-        }
-
-        return $board;
+        return TaskBoard::query()
+            ->whereIn('workspace_id', $user->workspaces()->pluck('workspaces.id'))
+            ->orderBy('sort_order')
+            ->first();
     }
 }

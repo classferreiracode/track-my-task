@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskReorderRequest;
+use App\Models\Task;
+use App\Models\TaskColumn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 
@@ -16,12 +18,19 @@ class TaskOrderController extends Controller
 
         $orderedIds = array_values(array_unique($orderedIds));
 
-        $column = $user->taskColumns()->whereKey($columnId)->first();
+        $column = TaskColumn::query()
+            ->with('board')
+            ->whereKey($columnId)
+            ->first();
 
         if (! $column) {
             return back()->withErrors([
                 'column_id' => 'Please select a valid column.',
             ]);
+        }
+
+        if (! $user->hasWorkspaceRole($column->board->workspace_id, ['owner', 'admin', 'editor'])) {
+            abort(403);
         }
 
         $doneSlugs = [
@@ -36,13 +45,24 @@ class TaskOrderController extends Controller
         $endedAt = $isCompleted ? now() : null;
 
         /** @var Collection<int, \App\Models\Task> $tasks */
-        $tasks = $user->tasks()
+        $tasks = Task::query()
             ->whereIn('id', $orderedIds)
-            ->with('activeTimeEntry')
+            ->with(['activeTimeEntry', 'taskColumn.board'])
             ->get()
             ->keyBy('id');
 
         if ($tasks->count() !== count($orderedIds)) {
+            return back()->withErrors([
+                'ordered_ids' => 'Please provide a valid ordering.',
+            ]);
+        }
+
+        $workspaceId = $column->board->workspace_id;
+        $invalidTask = $tasks->first(function ($task) use ($workspaceId) {
+            return $task->taskColumn?->board?->workspace_id !== $workspaceId;
+        });
+
+        if ($invalidTask) {
             return back()->withErrors([
                 'ordered_ids' => 'Please provide a valid ordering.',
             ]);

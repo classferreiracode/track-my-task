@@ -20,7 +20,16 @@ class TaskPolicy
      */
     public function view(User $user, Task $task): bool
     {
-        return $task->user_id === $user->id;
+        $workspaceId = $this->workspaceIdForTask($task);
+
+        if (! $workspaceId) {
+            return false;
+        }
+
+        return $user->hasWorkspaceRole(
+            $workspaceId,
+            ['owner', 'admin', 'editor', 'member', 'viewer'],
+        );
     }
 
     /**
@@ -36,7 +45,27 @@ class TaskPolicy
      */
     public function update(User $user, Task $task): bool
     {
-        return $task->user_id === $user->id;
+        $workspaceId = $this->workspaceIdForTask($task);
+
+        if (! $workspaceId) {
+            return false;
+        }
+
+        if ($user->hasWorkspaceRole($workspaceId, ['owner', 'admin', 'editor'])) {
+            return true;
+        }
+
+        if ($user->hasWorkspaceRole($workspaceId, ['member'])) {
+            if ($task->user_id === $user->id) {
+                return true;
+            }
+
+            return $task->assignees()
+                ->whereKey($user->id)
+                ->exists();
+        }
+
+        return false;
     }
 
     /**
@@ -44,6 +73,19 @@ class TaskPolicy
      */
     public function delete(User $user, Task $task): bool
     {
-        return $task->user_id === $user->id;
+        $workspaceId = $this->workspaceIdForTask($task);
+
+        if (! $workspaceId) {
+            return false;
+        }
+
+        return $user->hasWorkspaceRole($workspaceId, ['owner', 'admin']);
+    }
+
+    private function workspaceIdForTask(Task $task): ?int
+    {
+        $column = $task->taskColumn()->with('board')->first();
+
+        return $column?->board?->workspace_id;
     }
 }
