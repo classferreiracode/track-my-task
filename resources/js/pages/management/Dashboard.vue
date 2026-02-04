@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { CheckSquare, Clock, CreditCard, LayoutGrid, Users, Wallet } from 'lucide-vue-next';
 import { computed } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import ManagementLayout from '@/layouts/ManagementLayout.vue';
-import { CheckSquare, Clock, CreditCard, LayoutGrid, Users, Wallet } from 'lucide-vue-next';
+
 
 type Props = {
     kpi: {

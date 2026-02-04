@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { Award, BarChart3, ShieldCheck } from 'lucide-vue-next';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import CookieConsent from '@/components/CookieConsent.vue';
 import { home } from '@/routes';
 
 const page = usePage();
@@ -84,5 +85,7 @@ defineProps<{
                 <slot />
             </div>
         </div>
+
+        <CookieConsent />
     </div>
 </template>

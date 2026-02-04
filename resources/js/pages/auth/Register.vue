@@ -3,11 +3,12 @@ import { Form, Head } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
-import { login } from '@/routes';
+import { login, privacy, terms } from '@/routes';
 import { store } from '@/routes/register';
 </script>
 
@@ -82,10 +83,36 @@ import { store } from '@/routes/register';
                     <InputError :message="errors.password_confirmation" />
                 </div>
 
+                <div class="grid gap-2">
+                    <Label for="accepted_terms" class="flex items-center space-x-3 text-sm">
+                        <Checkbox id="accepted_terms" name="accepted_terms" required />
+                        <span>
+                            Aceito os
+                            <TextLink :href="terms()" class="underline underline-offset-4">
+                                Termos de Uso
+                            </TextLink>
+                        </span>
+                    </Label>
+                    <InputError :message="errors.accepted_terms" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="accepted_privacy" class="flex items-center space-x-3 text-sm">
+                        <Checkbox id="accepted_privacy" name="accepted_privacy" required />
+                        <span>
+                            Aceito a
+                            <TextLink :href="privacy()" class="underline underline-offset-4">
+                                Politica de Privacidade
+                            </TextLink>
+                        </span>
+                    </Label>
+                    <InputError :message="errors.accepted_privacy" />
+                </div>
+
                 <Button
                     type="submit"
                     class="mt-2 w-full"
-                    tabindex="5"
+                    tabindex="7"
                     :disabled="processing"
                     data-test="register-user-button"
                 >
@@ -99,7 +126,7 @@ import { store } from '@/routes/register';
                 <TextLink
                     :href="login()"
                     class="underline underline-offset-4"
-                    :tabindex="6"
+                    :tabindex="8"
                     >Entrar</TextLink
                 >
             </div>

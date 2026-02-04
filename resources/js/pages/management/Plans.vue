@@ -18,8 +18,8 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { update as updatePlan } from '@/routes/management/plans';
 import ManagementLayout from '@/layouts/ManagementLayout.vue';
+import { update as updatePlan } from '@/routes/management/plans';
 
 type Plan = {
     id: number;

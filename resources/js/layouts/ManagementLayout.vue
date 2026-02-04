@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { LogOut } from 'lucide-vue-next';
+import CookieConsent from '@/components/CookieConsent.vue';
 import { Button } from '@/components/ui/button';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { dashboard, logout } from '@/routes/management';
@@ -83,5 +84,7 @@ const { isCurrentUrl } = useCurrentUrl();
                 <slot />
             </main>
         </div>
+
+        <CookieConsent />
     </div>
 </template>

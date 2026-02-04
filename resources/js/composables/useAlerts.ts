@@ -7,14 +7,12 @@ const baseToastOptions: SweetAlertOptions = {
     showConfirmButton: false,
     timer: 2500,
     timerProgressBar: true,
-    zIndex: 2000,
 };
 
 const baseConfirmOptions: SweetAlertOptions = {
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#ef4444',
-    zIndex: 2000,
 };
 
 export const useAlerts = () => {

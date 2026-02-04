@@ -131,6 +131,16 @@ const sendQuickReply = (value: string) => {
     addMessage('user', value);
     respond(value);
 };
+const openSalesFlow = () => {
+    isOpen.value = true;
+    quickReplyMode.value = 'sales';
+    addMessage(
+        'bot',
+        `${agentName}: Posso direcionar para contato: email ou WhatsApp. Escolha abaixo.`,
+    );
+};
+
+defineExpose({ openSalesFlow });
 </script>
 
 <template>

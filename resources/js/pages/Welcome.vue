@@ -4,6 +4,7 @@ import { BarChart3, CheckCircle2, Clock3, FolderKanban } from 'lucide-vue-next';
 import { ref } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import ContactForm from '@/components/ContactForm.vue';
+import CookieConsent from '@/components/CookieConsent.vue';
 import HomeChatbot from '@/components/HomeChatbot.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +14,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login, privacy, register, terms } from '@/routes';
 
 withDefaults(
     defineProps<{
@@ -25,6 +26,11 @@ withDefaults(
 );
 
 const isBusinessModalOpen = ref(false);
+const chatbotRef = ref<InstanceType<typeof HomeChatbot> | null>(null);
+
+const openSalesChat = () => {
+    chatbotRef.value?.openSalesFlow();
+};
 </script>
 
 <template>
@@ -283,9 +289,9 @@ const isBusinessModalOpen = ref(false);
                             type="button"
                             variant="outline"
                             class="mt-3 w-full"
-                            @click="isBusinessModalOpen = true"
+                            @click="openSalesChat"
                         >
-                            Solicitar contato
+                            Falar com vendas
                         </Button>
                     </div>
                 </div>
@@ -370,7 +376,14 @@ const isBusinessModalOpen = ref(false);
         <footer class="border-t border-border/70 bg-background/80">
             <div class="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-6 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
                 <p>Track my Task - Gestao corporativa de produtividade.</p>
-                <p>Seguranca, controle e performance em um so lugar.</p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <Link :href="terms()" class="hover:text-foreground">
+                        Termos de Uso
+                    </Link>
+                    <Link :href="privacy()" class="hover:text-foreground">
+                        Politica de Privacidade
+                    </Link>
+                </div>
             </div>
         </footer>
     </div>
@@ -390,5 +403,6 @@ const isBusinessModalOpen = ref(false);
         </DialogContent>
     </Dialog>
 
-    <HomeChatbot />
+    <HomeChatbot ref="chatbotRef" />
+    <CookieConsent />
 </template>

@@ -37,8 +37,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { useAlerts } from '@/composables/useAlerts';
+import AppLayout from '@/layouts/AppLayout.vue';
 import { index as tasksIndex, report as tasksReport } from '@/routes/tasks';
 import { type BreadcrumbItem } from '@/types';
 
@@ -373,7 +373,6 @@ const deleteTask = async (task: Task) => {
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#ef4444',
         focusCancel: true,
-        zIndex: 2000,
     });
 
     if (!result.isConfirmed) {
@@ -510,7 +509,6 @@ const updateLabelColor = async (label: TaskLabel) => {
             icon: 'error',
             title: 'Erro',
             text: message,
-            zIndex: 2000,
         });
         return;
     }
@@ -541,7 +539,6 @@ const updateTagColor = async (tag: TaskTag) => {
             icon: 'error',
             title: 'Erro',
             text: message,
-            zIndex: 2000,
         });
         return;
     }
@@ -589,7 +586,6 @@ const createLabelFromTag = async (name: string) => {
             icon: 'error',
             title: 'Erro',
             text: message,
-            zIndex: 2000,
         });
         return;
     }
@@ -638,7 +634,6 @@ const createTagFromTag = async (name: string) => {
             icon: 'error',
             title: 'Erro',
             text: message,
-            zIndex: 2000,
         });
         return;
     }

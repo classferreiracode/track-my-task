@@ -1,14 +1,14 @@
 import { createInertiaApp } from '@inertiajs/vue3';
+import Echo from 'laravel-echo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import Pusher from 'pusher-js';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
 import '../css/app.css';
 import { initializeTheme } from './composables/useAppearance';
 declare global {
     interface Window {
-        Echo?: Echo;
+        Echo?: Echo<any>;
         Pusher?: typeof Pusher;
     }
 }

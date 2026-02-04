@@ -26,6 +26,14 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::get('privacy', function () {
+    return Inertia::render('legal/Privacy');
+})->name('privacy');
+
+Route::get('terms', function () {
+    return Inertia::render('legal/Terms');
+})->name('terms');
+
 Route::get('invitations/{token}', [WorkspaceInvitationController::class, 'show'])
     ->name('workspaces.invitations.show');
 

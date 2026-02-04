@@ -15,8 +15,8 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { useAlerts } from '@/composables/useAlerts';
+import AppLayout from '@/layouts/AppLayout.vue';
 import { index as teamsIndex } from '@/routes/teams';
 import { type BreadcrumbItem } from '@/types';
 
