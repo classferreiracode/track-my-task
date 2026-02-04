@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Workspace;
+use App\Services\PlanGate\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,6 +33,7 @@ class TeamController extends Controller
                 'role' => $workspace->pivot?->role,
             ])->values(),
             'selectedWorkspaceId' => $selectedWorkspace?->id,
+            'plan' => $selectedWorkspace ? $this->planPayload($selectedWorkspace) : null,
             'members' => $selectedWorkspace
                 ? $selectedWorkspace->members()
                     ->orderBy('name')
@@ -76,5 +78,25 @@ class TeamController extends Controller
         }
 
         return $workspaces->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function planPayload(Workspace $workspace): array
+    {
+        $service = app(SubscriptionService::class);
+        $plan = $service->currentPlan($workspace);
+
+        return [
+            'plan' => [
+                'key' => $plan->key,
+                'name' => $plan->name,
+                'description' => $plan->description,
+            ],
+            'limits' => $service->limits($workspace),
+            'usage' => $service->usage($workspace),
+            'upgrade_url' => route('settings.plan', ['workspace' => $workspace->id]),
+        ];
     }
 }

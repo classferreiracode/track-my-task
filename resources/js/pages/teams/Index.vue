@@ -5,6 +5,7 @@ import WorkspaceInvitationController from '@/actions/App/Http/Controllers/Worksp
 import WorkspaceMemberController from '@/actions/App/Http/Controllers/WorkspaceMemberController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import PlanLimitBanner from '@/components/PlanLimitBanner.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -44,11 +45,25 @@ type Invitation = {
     expires_at?: string | null;
 };
 
+type PlanPayload = {
+    plan: {
+        key: string;
+        name: string;
+        description?: string | null;
+    };
+    limits: Record<string, number | null>;
+    usage: {
+        members_count: number;
+    };
+    upgrade_url: string;
+};
+
 type Props = {
     workspaces: Workspace[];
     selectedWorkspaceId: number | null;
     members: Member[];
     invitations: Invitation[];
+    plan: PlanPayload | null;
 };
 
 const props = defineProps<Props>();
@@ -130,6 +145,18 @@ const canManageMembers = computed(() =>
 const canLeaveWorkspace = computed(
     () => selectedWorkspaceRole.value !== 'owner' && safeWorkspaceId.value > 0,
 );
+
+const plan = computed(() => props.plan);
+const memberLimitReached = computed(() => {
+    const limit = plan.value?.limits?.max_members;
+    const current = plan.value?.usage?.members_count;
+
+    if (limit === null || limit === undefined || current === undefined) {
+        return false;
+    }
+
+    return current >= limit;
+});
 
 const members = computed(() =>
     Array.isArray(props.members)
@@ -366,6 +393,13 @@ const confirmLeaveWorkspace = async () => {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
+                            <PlanLimitBanner
+                                v-if="memberLimitReached"
+                                class="mb-4"
+                                title="Limite de membros atingido"
+                                description="Este workspace alcançou o máximo de membros do plano."
+                                :cta-url="plan?.upgrade_url ?? '/settings/plan'"
+                            />
                             <Form
                                 v-if="safeWorkspaceId"
                                 v-bind="
@@ -396,7 +430,10 @@ const confirmLeaveWorkspace = async () => {
                                     </option>
                                 </select>
                                 <InputError :message="inviteErrors.role" />
-                                <Button type="submit" :disabled="processing">
+                                <Button
+                                    type="submit"
+                                    :disabled="processing || memberLimitReached"
+                                >
                                     Enviar convite
                                 </Button>
                                 <span

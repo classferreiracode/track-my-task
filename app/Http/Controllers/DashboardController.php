@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\TimeEntry;
+use App\Models\Workspace;
+use App\Services\PlanGate\SubscriptionService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +53,7 @@ class DashboardController extends Controller
                 'role' => $workspace->pivot?->role,
             ])->values(),
             'selectedWorkspaceId' => $workspaces->first()?->id,
+            'plan' => $workspaces->first() ? $this->planPayload($workspaces->first()) : null,
             'kpi' => [
                 'total_tasks' => $totalTasks,
                 'completed_tasks' => $completedTasks,
@@ -109,5 +112,25 @@ class DashboardController extends Controller
         }
 
         return $effectiveStart->diffInSeconds($rangeEnd);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function planPayload(Workspace $workspace): array
+    {
+        $service = app(SubscriptionService::class);
+        $plan = $service->currentPlan($workspace);
+
+        return [
+            'plan' => [
+                'key' => $plan->key,
+                'name' => $plan->name,
+                'description' => $plan->description,
+            ],
+            'limits' => $service->limits($workspace),
+            'usage' => $service->usage($workspace),
+            'upgrade_url' => route('settings.plan', ['workspace' => $workspace->id]),
+        ];
     }
 }

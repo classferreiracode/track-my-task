@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskReportRequest;
+use App\Models\ExportLog;
 use App\Models\TaskBoard;
 use App\Models\TimeEntry;
+use App\Services\PlanGate\SubscriptionService;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -21,6 +23,12 @@ class TaskReportController extends Controller
         $columnIds = $board
             ? $board->columns()->pluck('id')->all()
             : [];
+
+        $workspace = $board?->workspace ?? $user->workspaces()->first();
+
+        if ($workspace) {
+            app(SubscriptionService::class)->assertCan($workspace, 'export');
+        }
 
         $entries = TimeEntry::query()
             ->where('user_id', $user->id)
@@ -42,6 +50,15 @@ class TaskReportController extends Controller
             $rangeStart->toDateString(),
             $rangeEnd->toDateString(),
         );
+
+        if ($workspace) {
+            ExportLog::query()->create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->id,
+                'board_id' => $board?->id,
+                'exported_at' => now(),
+            ]);
+        }
 
         return response()->streamDownload(function () use ($entries, $rangeStart, $rangeEnd): void {
             $handle = fopen('php://output', 'w');

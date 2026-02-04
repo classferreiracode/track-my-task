@@ -44,6 +44,7 @@ Route::middleware(['auth', 'verified', 'onboarding'])->group(function () {
     Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
     Route::post('workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');
     Route::post('workspaces/{workspace}/invitations', [WorkspaceInvitationController::class, 'store'])
+        ->middleware('workspace.limit:invite_member,workspace')
         ->name('workspaces.invitations.store');
     Route::delete('workspaces/{workspace}/members/leave', [WorkspaceMemberController::class, 'leave'])
         ->name('workspaces.members.leave');
@@ -79,3 +80,4 @@ Route::middleware(['auth', 'verified', 'onboarding'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+require __DIR__.'/management.php';

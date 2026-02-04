@@ -11,6 +11,7 @@ use App\Models\TaskColumn;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\PlanGate\SubscriptionService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -50,13 +51,13 @@ class TaskController extends Controller
         $tasks = Task::query()
             ->whereIn('task_column_id', $columnIds)
             ->with([
-                'activeTimeEntry',
                 'assignees',
                 'labels',
                 'tags',
                 'taskColumn',
-                'timeEntries' => function ($query) use ($monthStart, $now) {
+                'timeEntries' => function ($query) use ($monthStart, $now, $user) {
                     $query
+                        ->where('user_id', $user->id)
                         ->whereNotNull('ended_at')
                         ->whereBetween('started_at', [$monthStart, $now])
                         ->orderBy('started_at');
@@ -65,49 +66,58 @@ class TaskController extends Controller
             ->orderBy('task_column_id')
             ->orderBy('sort_order')
             ->orderByDesc('created_at')
-            ->get()
-            ->map(function (Task $task) use ($columns, $dayStart, $weekStart, $monthStart, $now) {
-                $column = $this->resolveTaskColumn($task, $columns);
+            ->get();
 
-                return [
-                    'id' => $task->id,
-                    'title' => $task->title,
-                    'description' => $task->description,
-                    'priority' => $task->priority,
-                    'starts_at' => $task->starts_at?->toDateString(),
-                    'ends_at' => $task->ends_at?->toDateString(),
-                    'column_id' => $task->task_column_id ?? $column?->id,
-                    'sort_order' => $task->sort_order,
-                    'is_completed' => $task->is_completed,
-                    'completed_at' => $task->completed_at?->toIso8601String(),
-                    'assignees' => $task->assignees->map(fn ($assignee) => [
-                        'id' => $assignee->id,
-                        'name' => $assignee->name,
-                        'email' => $assignee->email,
-                    ])->values(),
-                    'labels' => $task->labels->map(fn ($label) => [
-                        'id' => $label->id,
-                        'name' => $label->name,
-                        'color' => $label->color,
-                    ])->values(),
-                    'tags' => $task->tags->map(fn ($tag) => [
-                        'id' => $tag->id,
-                        'name' => $tag->name,
-                        'color' => $tag->color,
-                    ])->values(),
-                    'active_entry' => $task->activeTimeEntry
-                        ? [
-                            'id' => $task->activeTimeEntry->id,
-                            'started_at' => $task->activeTimeEntry->started_at?->toIso8601String(),
-                        ]
-                        : null,
-                    'totals' => [
-                        'daily' => $this->sumDurationForRange($task, $dayStart, $now),
-                        'weekly' => $this->sumDurationForRange($task, $weekStart, $now),
-                        'monthly' => $this->sumDurationForRange($task, $monthStart, $now),
-                    ],
-                ];
-            })
+        $activeEntries = TimeEntry::query()
+            ->whereNull('ended_at')
+            ->where('user_id', $user->id)
+            ->whereIn('task_id', $tasks->pluck('id'))
+            ->get()
+            ->keyBy('task_id');
+
+        $tasks = $tasks->map(function (Task $task) use ($columns, $dayStart, $weekStart, $monthStart, $now, $activeEntries, $user) {
+            $column = $this->resolveTaskColumn($task, $columns);
+            $activeEntry = $activeEntries->get($task->id);
+
+            return [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'priority' => $task->priority,
+                'starts_at' => $task->starts_at?->toDateString(),
+                'ends_at' => $task->ends_at?->toDateString(),
+                'column_id' => $task->task_column_id ?? $column?->id,
+                'sort_order' => $task->sort_order,
+                'is_completed' => $task->is_completed,
+                'completed_at' => $task->completed_at?->toIso8601String(),
+                'assignees' => $task->assignees->map(fn ($assignee) => [
+                    'id' => $assignee->id,
+                    'name' => $assignee->name,
+                    'email' => $assignee->email,
+                ])->values(),
+                'labels' => $task->labels->map(fn ($label) => [
+                    'id' => $label->id,
+                    'name' => $label->name,
+                    'color' => $label->color,
+                ])->values(),
+                'tags' => $task->tags->map(fn ($tag) => [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                    'color' => $tag->color,
+                ])->values(),
+                'active_entry' => $activeEntry
+                    ? [
+                        'id' => $activeEntry->id,
+                        'started_at' => $activeEntry->started_at?->toIso8601String(),
+                    ]
+                    : null,
+                'totals' => [
+                    'daily' => $this->sumDurationForRange($task, $dayStart, $now, $user->id, $activeEntry),
+                    'weekly' => $this->sumDurationForRange($task, $weekStart, $now, $user->id, $activeEntry),
+                    'monthly' => $this->sumDurationForRange($task, $monthStart, $now, $user->id, $activeEntry),
+                ],
+            ];
+        })
             ->values();
 
         return Inertia::render('tasks/Index', [
@@ -118,6 +128,7 @@ class TaskController extends Controller
                 'role' => $workspace->pivot?->role,
             ])->values(),
             'selectedWorkspaceId' => $selectedWorkspace?->id,
+            'plan' => $selectedWorkspace ? $this->planPayload($selectedWorkspace) : null,
             'boards' => $boards->map(fn (TaskBoard $board) => [
                 'id' => $board->id,
                 'name' => $board->name,
@@ -209,6 +220,17 @@ class TaskController extends Controller
                 ->tasks()
                 ->where('task_column_id', $data['task_column_id'])
                 ->max('sort_order') + 1;
+        }
+
+        $column = TaskColumn::query()
+            ->with('board.workspace')
+            ->whereKey($data['task_column_id'])
+            ->first();
+
+        if ($column?->board?->workspace) {
+            app(SubscriptionService::class)->assertCan($column->board->workspace, 'create_task', [
+                'board' => $column->board,
+            ]);
         }
 
         $board = TaskBoard::query()
@@ -334,6 +356,8 @@ class TaskController extends Controller
         Task $task,
         CarbonInterface $rangeStart,
         CarbonInterface $rangeEnd,
+        int $userId,
+        ?TimeEntry $activeEntry = null,
     ): int {
         $completedSeconds = $task->timeEntries
             ->filter(function (TimeEntry $entry) use ($rangeStart, $rangeEnd) {
@@ -342,9 +366,7 @@ class TaskController extends Controller
             ->sum('duration_seconds');
 
         $runningSeconds = 0;
-        $activeEntry = $task->activeTimeEntry;
-
-        if ($activeEntry) {
+        if ($activeEntry && $activeEntry->user_id === $userId) {
             $runningSeconds = $this->runningSecondsForRange(
                 $activeEntry,
                 $rangeStart,
@@ -379,7 +401,15 @@ class TaskController extends Controller
 
     private function stopActiveTimer(Task $task): void
     {
-        $activeEntry = $task->activeTimeEntry()->first();
+        $user = request()->user();
+        if (! $user) {
+            return;
+        }
+
+        $activeEntry = $task->timeEntries()
+            ->whereNull('ended_at')
+            ->where('user_id', $user->id)
+            ->first();
 
         if (! $activeEntry) {
             return;
@@ -514,6 +544,26 @@ class TaskController extends Controller
     private function ensureDefaultWorkspace(User $user): Collection
     {
         return $user->workspaces()->orderBy('name')->get();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function planPayload(Workspace $workspace): array
+    {
+        $service = app(SubscriptionService::class);
+        $plan = $service->currentPlan($workspace);
+
+        return [
+            'plan' => [
+                'key' => $plan->key,
+                'name' => $plan->name,
+                'description' => $plan->description,
+            ],
+            'limits' => $service->limits($workspace),
+            'usage' => $service->usage($workspace),
+            'upgrade_url' => route('settings.plan', ['workspace' => $workspace->id]),
+        ];
     }
 
     /**

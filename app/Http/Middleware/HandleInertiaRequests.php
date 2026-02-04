@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\TaskBoard;
+use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -38,6 +39,10 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+
+        if ($user && ! $user instanceof User) {
+            $user = null;
+        }
         $boards = [];
         $workspaces = collect();
         $notifications = collect();
@@ -87,6 +92,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'invitation' => $request->session()->get('invitation'),
+                'plan_limit' => $request->session()->get('plan_limit'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'boards' => $boards,

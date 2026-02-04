@@ -2,7 +2,7 @@
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { ChevronsUpDown } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Multiselect from 'vue-multiselect';
 import TaskColumnController from '@/actions/App/Http/Controllers/TaskColumnController';
 import TaskCommentController from '@/actions/App/Http/Controllers/TaskCommentController';
@@ -13,6 +13,7 @@ import TaskTagController from '@/actions/App/Http/Controllers/TaskTagController'
 import TaskTimerController from '@/actions/App/Http/Controllers/TaskTimerController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import PlanLimitBanner from '@/components/PlanLimitBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,6 +63,21 @@ type Workspace = {
     role?: string | null;
 };
 
+type PlanPayload = {
+    plan: {
+        key: string;
+        name: string;
+        description?: string | null;
+    };
+    limits: Record<string, number | null>;
+    usage: {
+        members_count: number;
+        boards_count: number;
+        exports_count_month: number;
+    };
+    upgrade_url: string;
+};
+
 type WorkspaceMember = {
     id: number;
     name: string;
@@ -108,6 +124,15 @@ type Task = {
     };
 };
 
+type TaskStatusUpdate = {
+    id: number;
+    column_id: number | null;
+    sort_order: number;
+    is_completed: boolean;
+    completed_at?: string | null;
+    board_id: number | null;
+};
+
 type TaskComment = {
     id: number;
     body: string;
@@ -127,6 +152,7 @@ type TaskActivity = {
 type Props = {
     workspaces: Workspace[];
     selectedWorkspaceId: number | null;
+    plan: PlanPayload | null;
     boards: TaskBoard[];
     selectedBoardId: number | null;
     columns: TaskColumn[];
@@ -143,6 +169,12 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+const tasks = ref<Task[]>([...props.tasks]);
+
+const plan = computed(() => props.plan);
+const planLimits = computed(() => plan.value?.limits ?? {});
+const planUsage = computed(() => plan.value?.usage ?? null);
+const upgradeUrl = computed(() => plan.value?.upgrade_url ?? '/settings/plan');
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -165,6 +197,24 @@ const exportErrors = computed(() => {
         start: errors?.start,
         end: errors?.end,
     };
+});
+
+const isBoardsLimitReached = computed(() => {
+    const limit = planLimits.value.max_boards;
+    if (limit === null || limit === undefined || !planUsage.value) {
+        return false;
+    }
+
+    return planUsage.value.boards_count >= limit;
+});
+
+const isExportsLimitReached = computed(() => {
+    const limit = planLimits.value.max_exports_per_month;
+    if (limit === null || limit === undefined || !planUsage.value) {
+        return false;
+    }
+
+    return planUsage.value.exports_count_month >= limit;
 });
 
 const asOfLabel = computed(() =>
@@ -323,6 +373,7 @@ const deleteTask = async (task: Task) => {
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#ef4444',
         focusCancel: true,
+        zIndex: 2000,
     });
 
     if (!result.isConfirmed) {
@@ -459,6 +510,7 @@ const updateLabelColor = async (label: TaskLabel) => {
             icon: 'error',
             title: 'Erro',
             text: message,
+            zIndex: 2000,
         });
         return;
     }
@@ -489,6 +541,7 @@ const updateTagColor = async (tag: TaskTag) => {
             icon: 'error',
             title: 'Erro',
             text: message,
+            zIndex: 2000,
         });
         return;
     }
@@ -536,6 +589,7 @@ const createLabelFromTag = async (name: string) => {
             icon: 'error',
             title: 'Erro',
             text: message,
+            zIndex: 2000,
         });
         return;
     }
@@ -584,6 +638,7 @@ const createTagFromTag = async (name: string) => {
             icon: 'error',
             title: 'Erro',
             text: message,
+            zIndex: 2000,
         });
         return;
     }
@@ -711,6 +766,7 @@ const loadTaskDetails = async (taskId: number) => {
             icon: 'error',
             title: 'Não foi possível carregar os detalhes',
             text: taskDetailError.value,
+            zIndex: 2000,
         });
     } finally {
         taskDetailLoading.value = false;
@@ -868,6 +924,7 @@ const submitComment = async () => {
                 error instanceof Error
                     ? error.message
                     : 'Tente novamente em instantes.',
+            zIndex: 2000,
         });
     }
 };
@@ -1027,7 +1084,7 @@ const openTaskFromQuery = () => {
         return;
     }
 
-    const task = props.tasks.find((item) => item.id === taskId);
+    const task = tasks.value.find((item) => item.id === taskId);
 
     if (!task) {
         void toast({
@@ -1051,6 +1108,22 @@ watch(
     },
 );
 
+watch(
+    () => props.tasks,
+    (next) => {
+        tasks.value = [...next];
+        if (!selectedTask.value) {
+            return;
+        }
+
+        const updated = next.find((item) => item.id === selectedTask.value?.id);
+        if (updated) {
+            selectedTask.value = updated;
+        }
+    },
+    { deep: true },
+);
+
 watch(isTaskModalOpen, (isOpen) => {
     if (!isOpen) {
         unsubscribeFromTaskChannel();
@@ -1062,6 +1135,7 @@ watch(isTaskModalOpen, (isOpen) => {
     }
 });
 
+
 const tasksByColumn = computed(() => {
     const grouped: Record<number, Task[]> = {};
 
@@ -1069,7 +1143,7 @@ const tasksByColumn = computed(() => {
         grouped[column.id] = [];
     });
 
-    props.tasks.forEach((task) => {
+    tasks.value.forEach((task) => {
         const fallbackColumnId = sortedColumns.value[0]?.id;
         const columnId = task.column_id ?? fallbackColumnId;
 
@@ -1086,6 +1160,104 @@ const tasksByColumn = computed(() => {
     });
 
     return grouped;
+});
+
+const boardChannelId = ref<number | null>(null);
+
+const applyTaskStatusUpdate = (
+    payload: TaskStatusUpdate,
+    actorId?: number | null,
+    actorName?: string | null,
+) => {
+    const index = tasks.value.findIndex((task) => task.id === payload.id);
+    if (index === -1) {
+        return;
+    }
+
+    const updated = {
+        ...tasks.value[index],
+        column_id: payload.column_id,
+        sort_order: payload.sort_order,
+        is_completed: payload.is_completed,
+        completed_at: payload.completed_at ?? null,
+    };
+
+    tasks.value.splice(index, 1, updated);
+
+    if (selectedTask.value?.id === updated.id) {
+        selectedTask.value = updated;
+    }
+
+    const auth = page.props.auth as { user?: WorkspaceMember } | undefined;
+    const currentUserId = auth?.user?.id ?? null;
+
+    if (actorId && currentUserId && actorId !== currentUserId) {
+        void toast({
+            icon: 'info',
+            title: `Task movida por ${actorName ?? 'outro usuário'}.`,
+        });
+    }
+};
+
+const subscribeToBoardChannel = (boardId: number) => {
+    if (!window.Echo || typeof window.Echo.join !== 'function') {
+        return;
+    }
+
+    if (boardChannelId.value === boardId) {
+        return;
+    }
+
+    if (boardChannelId.value) {
+        window.Echo.leave(`boards.${boardChannelId.value}`);
+    }
+
+    boardChannelId.value = boardId;
+
+    window.Echo.join(`boards.${boardId}`)
+        .listen(
+            '.task.status.updated',
+            (payload: {
+                task: TaskStatusUpdate;
+                actor_id?: number | null;
+                actor_name?: string | null;
+            }) => {
+                if (payload?.task) {
+                    applyTaskStatusUpdate(
+                        payload.task,
+                        payload.actor_id,
+                        payload.actor_name,
+                    );
+                }
+            },
+        );
+};
+
+const unsubscribeFromBoardChannel = () => {
+    if (!window.Echo || !boardChannelId.value) {
+        boardChannelId.value = null;
+        return;
+    }
+
+    window.Echo.leave(`boards.${boardChannelId.value}`);
+    boardChannelId.value = null;
+};
+
+watch(
+    activeBoardId,
+    (boardId) => {
+        if (!boardId) {
+            unsubscribeFromBoardChannel();
+            return;
+        }
+
+        subscribeToBoardChannel(boardId);
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    unsubscribeFromBoardChannel();
 });
 
 const draggedTaskId = ref<number | null>(null);
@@ -1682,6 +1854,13 @@ const setWorkspace = (workspaceId: number) => {
                                     </span>
                                 </summary>
                                 <div class="mt-3">
+                                    <PlanLimitBanner
+                                        v-if="isExportsLimitReached"
+                                        class="mb-3"
+                                        title="Limite de exportações atingido"
+                                        description="Você já usou todas as exportações disponíveis neste mês."
+                                        :cta-url="upgradeUrl"
+                                    />
                                     <form class="flex flex-col gap-3" method="get" :action="reportUrl">
                                         <input
                                             type="hidden"
@@ -1706,7 +1885,11 @@ const setWorkspace = (workspaceId: number) => {
                                             />
                                             <InputError :message="exportErrors.end" />
                                         </div>
-                                        <Button type="submit" variant="outline">
+                                        <Button
+                                            type="submit"
+                                            variant="outline"
+                                            :disabled="isExportsLimitReached"
+                                        >
                                             Exportar Excel
                                         </Button>
                                     </form>

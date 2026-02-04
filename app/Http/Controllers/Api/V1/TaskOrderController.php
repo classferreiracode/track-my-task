@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskReorderRequest;
 use App\Models\Task;
 use App\Models\TaskColumn;
+use App\Models\TimeEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 
@@ -49,9 +50,16 @@ class TaskOrderController extends Controller
         /** @var Collection<int, \App\Models\Task> $tasks */
         $tasks = Task::query()
             ->whereIn('id', $orderedIds)
-            ->with(['activeTimeEntry', 'taskColumn.board'])
+            ->with(['taskColumn.board'])
             ->get()
             ->keyBy('id');
+
+        $activeEntries = TimeEntry::query()
+            ->whereNull('ended_at')
+            ->where('user_id', $user->id)
+            ->whereIn('task_id', $orderedIds)
+            ->get()
+            ->keyBy('task_id');
 
         if ($tasks->count() !== count($orderedIds)) {
             return response()->json([
@@ -75,11 +83,15 @@ class TaskOrderController extends Controller
         foreach ($orderedIds as $index => $taskId) {
             $task = $tasks[$taskId];
 
-            if ($endedAt && $task->activeTimeEntry) {
-                $task->activeTimeEntry->update([
-                    'ended_at' => $endedAt,
-                    'duration_seconds' => $task->activeTimeEntry->started_at->diffInSeconds($endedAt),
-                ]);
+            if ($endedAt) {
+                $activeEntry = $activeEntries->get($task->id);
+
+                if ($activeEntry) {
+                    $activeEntry->update([
+                        'ended_at' => $endedAt,
+                        'duration_seconds' => $activeEntry->started_at->diffInSeconds($endedAt),
+                    ]);
+                }
             }
 
             $task->update([

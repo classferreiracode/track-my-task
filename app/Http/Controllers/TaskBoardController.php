@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\TaskBoardStoreRequest;
 use App\Models\TaskBoard;
 use App\Models\Workspace;
+use App\Services\PlanGate\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
 
@@ -35,6 +36,8 @@ class TaskBoardController extends Controller
         if (! $user->hasWorkspaceRole($workspace->id, ['owner', 'admin', 'editor'])) {
             abort(403);
         }
+
+        app(SubscriptionService::class)->assertCan($workspace, 'create_board');
 
         if ($slug === '') {
             $slug = Str::slug(Str::random(8));

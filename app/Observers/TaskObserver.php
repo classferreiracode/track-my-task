@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Events\TaskActivityCreated;
+use App\Events\TaskStatusUpdated;
 use App\Mail\TaskStatusMail;
 use App\Models\Task;
 use Illuminate\Support\Carbon;
@@ -25,7 +26,7 @@ class TaskObserver
      */
     public function updated(Task $task): void
     {
-        $task->loadMissing(['taskColumn.board.workspace', 'assignees', 'user']);
+        $task->load(['taskColumn.board.workspace', 'assignees', 'user']);
 
         if ($task->wasChanged('task_column_id')) {
             $this->sendStatusMail($task, 'status_changed', [
@@ -57,6 +58,12 @@ class TaskObserver
             $this->logActivity($task, 'overdue', [
                 'due_date' => $task->ends_at?->toDateString(),
             ]);
+        }
+
+        if ($task->wasChanged('task_column_id')
+            || $task->wasChanged('sort_order')
+            || $task->wasChanged('is_completed')) {
+            TaskStatusUpdated::dispatch($task);
         }
     }
 

@@ -23,7 +23,10 @@ class TaskTimerController extends Controller
             }
         }
 
-        $activeEntry = $task->activeTimeEntry()->first();
+        $activeEntry = $task->timeEntries()
+            ->whereNull('ended_at')
+            ->where('user_id', $request->user()->id)
+            ->first();
 
         if ($activeEntry) {
             return response()->json([
@@ -59,7 +62,10 @@ class TaskTimerController extends Controller
             }
         }
 
-        $activeEntry = $task->activeTimeEntry()->first();
+        $activeEntry = $task->timeEntries()
+            ->whereNull('ended_at')
+            ->where('user_id', $request->user()->id)
+            ->first();
 
         if (! $activeEntry) {
             return response()->json([

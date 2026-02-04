@@ -7,6 +7,7 @@ use App\Http\Requests\WorkspaceInvitationStoreRequest;
 use App\Mail\WorkspaceInvitationMail;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
+use App\Services\PlanGate\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -74,6 +75,8 @@ class WorkspaceInvitationController extends Controller
         if (! $user->hasWorkspaceRole($workspace->id, ['owner', 'admin'])) {
             abort(403);
         }
+
+        app(SubscriptionService::class)->assertCan($workspace, 'invite_member');
 
         $email = $request->string('email')->trim()->lower()->toString();
         $role = $request->string('role')->toString();

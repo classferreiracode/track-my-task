@@ -38,10 +38,12 @@ class WorkspaceController extends Controller
             ]);
         }
 
+        $planKey = $request->string('plan')->toString() ?: 'free';
+
         $workspace = $user->ownedWorkspaces()->create([
             'name' => $name,
             'slug' => $slug,
-            'plan' => $request->string('plan')->toString() ?: 'free',
+            'plan' => $planKey,
         ]);
 
         $workspace->memberships()->create([
@@ -49,6 +51,12 @@ class WorkspaceController extends Controller
             'role' => 'owner',
             'joined_at' => now(),
             'is_active' => true,
+        ]);
+
+        $workspace->subscription()->create([
+            'plan_key' => $planKey,
+            'status' => 'active',
+            'started_at' => now(),
         ]);
 
         return back();

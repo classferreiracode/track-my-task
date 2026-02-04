@@ -7,6 +7,7 @@ import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceControl
 import InputError from '@/components/InputError.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavUser from '@/components/NavUser.vue';
+import PlanLimitBanner from '@/components/PlanLimitBanner.vue';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -48,6 +49,14 @@ type WorkspaceNavItem = {
     id: number;
     name: string;
     role?: string | null;
+};
+
+type PlanPayload = {
+    limits: Record<string, number | null>;
+    usage: {
+        boards_count: number;
+    };
+    upgrade_url: string;
 };
 
 const page = usePage();
@@ -104,6 +113,18 @@ const selectedBoardId = computed(() => {
     const boardId = Number(url.searchParams.get('board'));
 
     return Number.isFinite(boardId) && boardId > 0 ? boardId : null;
+});
+
+const plan = computed(() => page.props.plan as PlanPayload | undefined);
+const boardLimitReached = computed(() => {
+    const limit = plan.value?.limits?.max_boards;
+    const current = plan.value?.usage?.boards_count;
+
+    if (limit === null || limit === undefined || current === undefined) {
+        return false;
+    }
+
+    return current >= limit;
 });
 
 const boardErrors = computed(() => {
@@ -255,9 +276,13 @@ const footerNavItems: NavItem[] = [
                     />
                     <InputError :message="workspaceErrors.name" />
                     <div class="flex items-center gap-2">
-                        <Button size="sm" type="submit" :disabled="processing">
-                            Criar
-                        </Button>
+                    <Button
+                        size="sm"
+                        type="submit"
+                        :disabled="processing || boardLimitReached"
+                    >
+                        Criar
+                    </Button>
                         <span
                             v-if="recentlySuccessful"
                             class="text-[11px] text-sidebar-foreground/70"
@@ -318,6 +343,16 @@ const footerNavItems: NavItem[] = [
                 >
                     Nenhum board cadastrado.
                 </p>
+                <div
+                    v-if="boardLimitReached"
+                    class="mt-3 px-3 text-xs group-data-[collapsible=icon]:hidden"
+                >
+                    <PlanLimitBanner
+                        title="Limite de boards atingido"
+                        description="Este workspace alcançou o máximo de boards do plano."
+                        :cta-url="plan?.upgrade_url ?? '/settings/plan'"
+                    />
+                </div>
                 <Form
                     v-bind="TaskBoardController.store.form()"
                     class="mt-3 flex flex-col gap-2 px-3 group-data-[collapsible=icon]:hidden"

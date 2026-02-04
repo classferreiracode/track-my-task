@@ -286,6 +286,68 @@ test('users can start and stop timers', function () {
     Date::setTestNow();
 });
 
+test('timers are tracked per user', function () {
+    $owner = User::factory()->create();
+    $workspace = createWorkspaceForUser($owner);
+    $board = createBoardForUser($owner, $workspace);
+    $column = createColumnForUser($owner, $board);
+    $task = Task::factory()->for($owner)->create([
+        'task_column_id' => $column->id,
+    ]);
+
+    $member = User::factory()->create();
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $member->id,
+        'role' => 'member',
+    ]);
+    $task->assignees()->sync([
+        $member->id => [
+            'assigned_by_user_id' => $owner->id,
+            'assigned_at' => now(),
+        ],
+    ]);
+
+    Date::setTestNow('2026-01-26 09:00:00');
+    $this->actingAs($owner)
+        ->post(route('tasks.timer.start', $task))
+        ->assertRedirect();
+
+    Date::setTestNow('2026-01-26 09:15:00');
+    $this->actingAs($member)
+        ->post(route('tasks.timer.start', $task))
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('time_entries', [
+        'task_id' => $task->id,
+        'user_id' => $owner->id,
+        'ended_at' => null,
+    ]);
+    $this->assertDatabaseHas('time_entries', [
+        'task_id' => $task->id,
+        'user_id' => $member->id,
+        'ended_at' => null,
+    ]);
+
+    Date::setTestNow('2026-01-26 10:00:00');
+    $this->actingAs($owner)
+        ->patch(route('tasks.timer.stop', $task))
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('time_entries', [
+        'task_id' => $task->id,
+        'user_id' => $owner->id,
+        'duration_seconds' => 3600,
+    ]);
+    $this->assertDatabaseHas('time_entries', [
+        'task_id' => $task->id,
+        'user_id' => $member->id,
+        'ended_at' => null,
+    ]);
+
+    Date::setTestNow();
+});
+
 test('users cannot start timers for other users tasks', function () {
     $taskOwner = User::factory()->create();
     $workspace = createWorkspaceForUser($taskOwner);

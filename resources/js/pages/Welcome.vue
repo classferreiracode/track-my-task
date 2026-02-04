@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { BarChart3, CheckCircle2, Clock3, FolderKanban } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import ContactForm from '@/components/ContactForm.vue';
+import HomeChatbot from '@/components/HomeChatbot.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { dashboard, login, register } from '@/routes';
 
 withDefaults(
@@ -12,6 +23,8 @@ withDefaults(
         canRegister: true,
     },
 );
+
+const isBusinessModalOpen = ref(false);
 </script>
 
 <template>
@@ -173,6 +186,185 @@ withDefaults(
                     </div>
                 </div>
             </section>
+
+            <section class="mt-16">
+                <div class="flex flex-col gap-3 text-center">
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                        Planos
+                    </p>
+                    <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+                        Escolha o plano ideal para o seu time
+                    </h2>
+                    <p class="text-sm text-muted-foreground">
+                        Limites por workspace com foco em produtividade e controle de custos.
+                    </p>
+                </div>
+
+                <div class="mt-10 grid gap-6 lg:grid-cols-3">
+                    <div class="rounded-2xl border border-border/70 bg-card/70 p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold">Free</p>
+                                <p class="text-xs text-muted-foreground">Para comecar</p>
+                            </div>
+                            <span class="text-xs font-semibold uppercase text-muted-foreground">
+                                Gratis
+                            </span>
+                        </div>
+                        <div class="mt-6 space-y-3 text-sm text-muted-foreground">
+                            <p>Até 3 membros</p>
+                            <p>Até 3 boards</p>
+                            <p>1 exportacao por mes</p>
+                            <p>1 timer ativo por usuario</p>
+                        </div>
+                        <Link
+                            v-if="canRegister"
+                            :href="register()"
+                            class="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                        >
+                            Criar conta
+                        </Link>
+                        <Link
+                            v-else
+                            :href="login()"
+                            class="mt-6 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-4 py-2 text-sm font-medium"
+                        >
+                            Acessar
+                        </Link>
+                    </div>
+
+                    <div class="rounded-2xl border border-primary/30 bg-primary/10 p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold">Pro</p>
+                                <p class="text-xs text-muted-foreground">Times em crescimento</p>
+                            </div>
+                            <span class="rounded-full bg-primary/20 px-3 py-1 text-[10px] font-semibold uppercase text-primary">
+                                Mais escolhido
+                            </span>
+                        </div>
+                        <div class="mt-6 space-y-3 text-sm text-muted-foreground">
+                            <p>Até 10 membros</p>
+                            <p>Até 10 boards</p>
+                            <p>50 exportacoes por mes</p>
+                            <p>3 timers ativos por usuario</p>
+                        </div>
+                        <Link
+                            :href="register()"
+                            class="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                        >
+                            Fazer upgrade
+                        </Link>
+                    </div>
+
+                    <div class="rounded-2xl border border-border/70 bg-card/70 p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold">Business</p>
+                                <p class="text-xs text-muted-foreground">Operacao completa</p>
+                            </div>
+                            <span class="text-xs font-semibold uppercase text-muted-foreground">
+                                Enterprise
+                            </span>
+                        </div>
+                        <div class="mt-6 space-y-3 text-sm text-muted-foreground">
+                            <p>Até 50 membros</p>
+                            <p>Até 50 boards</p>
+                            <p>500 exportacoes por mes</p>
+                            <p>10 timers ativos por usuario</p>
+                        </div>
+                        <Link
+                            :href="register()"
+                            class="mt-6 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-4 py-2 text-sm font-medium"
+                        >
+                            Falar com vendas
+                        </Link>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            class="mt-3 w-full"
+                            @click="isBusinessModalOpen = true"
+                        >
+                            Solicitar contato
+                        </Button>
+                    </div>
+                </div>
+
+                <div class="mt-12 rounded-2xl border border-border/70 bg-card/70 p-6 shadow-sm">
+                    <div class="flex flex-col gap-2">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                            Comparador
+                        </p>
+                        <h3 class="text-2xl font-semibold tracking-tight">
+                            Compare recursos lado a lado
+                        </h3>
+                        <p class="text-sm text-muted-foreground">
+                            Entenda rapidamente os limites por workspace.
+                        </p>
+                    </div>
+
+                    <div class="mt-6 overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-border/70 text-xs uppercase text-muted-foreground">
+                                    <th class="py-3 pr-4">Recursos</th>
+                                    <th class="py-3 pr-4">Free</th>
+                                    <th class="py-3 pr-4">Pro</th>
+                                    <th class="py-3">Business</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+                                <tr class="border-b border-border/70">
+                                    <td class="py-3 pr-4 font-medium">Membros</td>
+                                    <td class="py-3 pr-4">3</td>
+                                    <td class="py-3 pr-4">10</td>
+                                    <td class="py-3">50</td>
+                                </tr>
+                                <tr class="border-b border-border/70">
+                                    <td class="py-3 pr-4 font-medium">Boards</td>
+                                    <td class="py-3 pr-4">3</td>
+                                    <td class="py-3 pr-4">10</td>
+                                    <td class="py-3">50</td>
+                                </tr>
+                                <tr class="border-b border-border/70">
+                                    <td class="py-3 pr-4 font-medium">Exportacoes/mês</td>
+                                    <td class="py-3 pr-4">1</td>
+                                    <td class="py-3 pr-4">50</td>
+                                    <td class="py-3">500</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 pr-4 font-medium">Timers ativos/usuário</td>
+                                    <td class="py-3 pr-4">1</td>
+                                    <td class="py-3 pr-4">3</td>
+                                    <td class="py-3">10</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mt-12 rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm">
+                    <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                        <div class="space-y-3">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                                Contato
+                            </p>
+                            <h3 class="text-2xl font-semibold tracking-tight">
+                                Fale com nosso time
+                            </h3>
+                            <p class="text-sm text-muted-foreground">
+                                Conte o tamanho do seu time e objetivos para receber uma proposta do plano Business.
+                            </p>
+                            <div class="rounded-xl border border-border/70 bg-muted/40 p-4 text-xs text-muted-foreground">
+                                SLA de resposta em até 1 dia util.
+                            </div>
+                        </div>
+                        <div>
+                            <ContactForm submit-label="Enviar pedido" />
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer class="border-t border-border/70 bg-background/80">
@@ -182,4 +374,21 @@ withDefaults(
             </div>
         </footer>
     </div>
+
+    <Dialog v-model:open="isBusinessModalOpen">
+        <DialogContent class="sm:max-w-xl">
+            <DialogHeader>
+                <DialogTitle>Plano Business</DialogTitle>
+                <DialogDescription>
+                    Envie suas informacoes e retornaremos com uma proposta.
+                </DialogDescription>
+            </DialogHeader>
+            <ContactForm
+                submit-label="Enviar contato"
+                @submitted="isBusinessModalOpen = false"
+            />
+        </DialogContent>
+    </Dialog>
+
+    <HomeChatbot />
 </template>

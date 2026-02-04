@@ -9,6 +9,7 @@ use App\Http\Resources\TaskResource;
 use App\Models\Task;
 use App\Models\TaskBoard;
 use App\Models\TaskColumn;
+use App\Models\TimeEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,11 +28,22 @@ class TaskController extends Controller
 
         $tasks = Task::query()
             ->whereIn('task_column_id', $columnIds)
-            ->with(['taskColumn', 'activeTimeEntry', 'labels', 'tags', 'assignees'])
+            ->with(['taskColumn', 'labels', 'tags', 'assignees'])
             ->orderBy('task_column_id')
             ->orderBy('sort_order')
             ->orderByDesc('created_at')
             ->get();
+
+        $activeEntries = TimeEntry::query()
+            ->whereNull('ended_at')
+            ->where('user_id', $request->user()->id)
+            ->whereIn('task_id', $tasks->pluck('id'))
+            ->get()
+            ->keyBy('task_id');
+
+        $tasks->each(function (Task $task) use ($activeEntries): void {
+            $task->setRelation('activeTimeEntry', $activeEntries->get($task->id));
+        });
 
         return response()->json([
             'data' => TaskResource::collection($tasks),
@@ -105,7 +117,14 @@ class TaskController extends Controller
             );
         }
 
-        $task->load(['taskColumn', 'activeTimeEntry', 'labels', 'tags', 'assignees']);
+        $task->load(['taskColumn', 'labels', 'tags', 'assignees']);
+        $task->setRelation(
+            'activeTimeEntry',
+            $task->timeEntries()
+                ->whereNull('ended_at')
+                ->where('user_id', $request->user()->id)
+                ->first(),
+        );
 
         return response()->json([
             'data' => new TaskResource($task),
@@ -145,7 +164,7 @@ class TaskController extends Controller
         }
 
         if (($data['is_completed'] ?? false) === true) {
-            $this->stopActiveTimer($task);
+            $this->stopActiveTimer($task, $request->user()->id);
         }
 
         $task->fill($data);
@@ -184,7 +203,14 @@ class TaskController extends Controller
             );
         }
 
-        $task->load(['taskColumn', 'activeTimeEntry', 'labels', 'tags', 'assignees']);
+        $task->load(['taskColumn', 'labels', 'tags', 'assignees']);
+        $task->setRelation(
+            'activeTimeEntry',
+            $task->timeEntries()
+                ->whereNull('ended_at')
+                ->where('user_id', $request->user()->id)
+                ->first(),
+        );
 
         return response()->json([
             'data' => new TaskResource($task),
@@ -240,9 +266,12 @@ class TaskController extends Controller
         $data['completed_at'] = null;
     }
 
-    private function stopActiveTimer(Task $task): void
+    private function stopActiveTimer(Task $task, int $userId): void
     {
-        $activeEntry = $task->activeTimeEntry()->first();
+        $activeEntry = $task->timeEntries()
+            ->whereNull('ended_at')
+            ->where('user_id', $userId)
+            ->first();
 
         if (! $activeEntry) {
             return;

@@ -49,6 +49,12 @@ class OnboardingController extends Controller
             'plan' => 'free',
         ]);
 
+        $workspace->subscription()->create([
+            'plan_key' => 'free',
+            'status' => 'active',
+            'started_at' => now(),
+        ]);
+
         $workspace->memberships()->create([
             'user_id' => $user->id,
             'role' => 'owner',

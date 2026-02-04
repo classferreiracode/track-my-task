@@ -1,5 +1,8 @@
 <?php
 
+use App\Exceptions\PlanLimitExceededException;
+use App\Http\Middleware\EnsureManagementAuthenticated;
+use App\Http\Middleware\EnsureWorkspaceLimit;
 use App\Http\Middleware\EnsureWorkspaceSetup;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -7,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,8 +31,24 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'onboarding' => EnsureWorkspaceSetup::class,
+            'workspace.limit' => EnsureWorkspaceLimit::class,
+            'management.auth' => EnsureManagementAuthenticated::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (PlanLimitExceededException $exception, Request $request) {
+            $payload = $exception->payload();
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                    'limit' => $payload,
+                ], 403);
+            }
+
+            return back()
+                ->withErrors(['plan_limit' => $exception->getMessage()])
+                ->with('plan_limit', $payload)
+                ->setStatusCode(403);
+        });
     })->create();
